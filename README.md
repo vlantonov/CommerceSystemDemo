@@ -77,7 +77,16 @@ The **FastAPI** was chosen:
    * [Shopify Product Image resource](https://shopify.dev/docs/api/admin-rest/2024-01/resources/product-image)
    * [What is the Best URL Length Limit for SEO: Maximum URL Length Characters](https://serpstat.com/blog/how-long-should-be-the-page-url-length-for-seo/)
 
-### 4.4. The format unique product identifier (SKU) is to be chosen following the established practices in existing systems
+### 4.4. The format for the unique product identifier (SKU) is to be chosen following the established practices in existing systems
+* Alphanumeric string (`VARCHAR(100)`)
+* Must be unique per system (`UNIQUE` constraint in DB)
+* Must be present (`NOT NULL` constraint in DB)
+* Normalized to upper-case on write to prevent duplicates
+* Validation regex: `^[A-Z0-9_-]{1,100}$` (enforce at the API layer via Pydantic)
+* References:
+   * [Understanding SKU formats](https://support.ecwid.com/hc/en-us/articles/360011125640-Understanding-SKU-formats)
+   * [Shopify SKU guidance](https://help.shopify.com/en/manual/products/details/sku)
+   * [What is a SKU - and how does it help ecommerce sellers?](https://sell.amazon.com/es/blog/sku-definition-guide)
 
 ### 4.5. The name of the category constraints
 
