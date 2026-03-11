@@ -89,6 +89,13 @@ The **FastAPI** was chosen:
    * [What is a SKU - and how does it help ecommerce sellers?](https://sell.amazon.com/es/blog/sku-definition-guide)
 
 ### 4.5. The name of the category constraints
+* Use [UTF-8 encoding](https://en.wikipedia.org/wiki/UTF-8) capable of representing all Unicode characters
+* String 255 chars (`VARCHAR(255)`)
+* Must be present (`NOT NULL` constraint in DB) and not empty (enforce `min_length=1` in Pydantic)
+* Must be unique per same parent (composite unique constraint on `(parent_id, name)`)
+* References:
+   * [Shopify Product Category](https://shopify.dev/docs/api/admin-graphql/latest/objects/ProductCategory)
+   * [Magento categories query](https://developer.adobe.com/commerce/webapi/graphql/schema/products/queries/categories/)
 
 ### 4.6. The parent field of the category
 
