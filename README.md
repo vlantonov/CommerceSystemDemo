@@ -70,6 +70,12 @@ The **FastAPI** was chosen:
    * [Shopify Product Description Length: Best Practices for SEO and Conversions](https://lettercounter.org/blog/shopify-product-description-length/)
 
 ### 4.3. The format and the storage of the image is to be chosen following the established practices in existing systems
+* Store a URL string (`VARCHAR(2083)`)
+* Storing binary image data in the database worsens query performance, increases backup sizes and traffic.
+* Accepted formats: JPEG (universal), PNG (universal), WebP (modern optimized delivery).
+* References:
+   * [Shopify Product Image resource](https://shopify.dev/docs/api/admin-rest/2024-01/resources/product-image)
+   * [What is the Best URL Length Limit for SEO: Maximum URL Length Characters](https://serpstat.com/blog/how-long-should-be-the-page-url-length-for-seo/)
 
 ### 4.4. The format unique product identifier (SKU) is to be chosen following the established practices in existing systems
 
