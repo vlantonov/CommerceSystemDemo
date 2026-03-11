@@ -61,6 +61,13 @@ The **FastAPI** was chosen:
    * [Get Started With Django: Build a Portfolio App](https://realpython.com/get-started-with-django-1/)
 
 ### 4.2. Constraints to text fields according to the established practices in existing systems
+* Use [UTF-8 encoding](https://en.wikipedia.org/wiki/UTF-8) capable of representing all Unicode characters
+* `Product.title` : 255 chars (`VARCHAR(255)`)
+* `Product.description` : 10000 chars (`TEXT`)
+* `Category.name`: 255 chars (`VARCHAR(255)`)
+* References:
+   * [Shopify Product description](https://shopify.dev/docs/api/admin-graphql/latest/objects/Product#field-Product.fields.description)
+   * [Shopify Product Description Length: Best Practices for SEO and Conversions](https://lettercounter.org/blog/shopify-product-description-length/)
 
 ### 4.3. The format and the storage of the image is to be chosen following the established practices in existing systems
 
