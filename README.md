@@ -49,6 +49,16 @@ Create a service which handles operations on products in an E-commerce system.
 ## 4. Requirements Refinement Decisions
 
 ### 4.1. FastAPI or Django framework
+The **FastAPI** was chosen:
+* Supports `async/await` throughout, enabling parallel DB queries and concurrent connections without threading overhead - according to the requirements for `low latency` and `multiple parallel connections`
+* Built-in validation via [Pydantic](https://docs.pydantic.dev/latest/) to be used for input data contraints
+* Auto-generated docs via OpenAPI/Swagger UI out of the box ([FastAPI docs](https://fastapi.tiangolo.com/features/))
+* Easier to pick up compared to Django with great example-driven documentation.
+* Django would be preferable if ORM ecosystem, admin panel, or auth are required.
+* References:
+   * [Django vs. FastAPI: A Comparison](https://blog.jetbrains.com/pycharm/2023/12/django-vs-fastapi-which-is-the-best-python-web-framework/#django-vs.-fastapi-a-comparison)
+   * [A Close Look at a FastAPI Example Application](https://realpython.com/fastapi-python-web-apis/)
+   * [Get Started With Django: Build a Portfolio App](https://realpython.com/get-started-with-django-1/)
 
 ### 4.2. Constraints to text fields according to the established practices in existing systems
 
