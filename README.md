@@ -31,6 +31,7 @@
    * [7.3. Product Endpoints](#73-product-endpoints)
    * [7.4. Search Endpoint](#74-search-endpoint)
    * [7.5. Request and Response Schemas](#75-request-and-response-schemas)
+* [8. Run and Test](#8-run-and-test)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -460,4 +461,41 @@ Validation error response:
       }
    ]
 }
+```
+
+## 8. Run and Test
+
+1. Create and activate a virtual environment:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+```
+
+2. Install dependencies:
+
+```bash
+pip install -e '.[dev]'
+```
+
+3. Copy environment config and adjust DB credentials if needed:
+
+```bash
+cp .env.example .env
+```
+
+4. Start the API server:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+5. Open docs:
+* Swagger UI: `http://127.0.0.1:8000/docs`
+* Health endpoint: `http://127.0.0.1:8000/health`
+
+6. Run tests (real PostgreSQL container required):
+
+```bash
+pytest -q
 ```
