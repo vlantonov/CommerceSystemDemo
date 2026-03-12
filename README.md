@@ -488,7 +488,29 @@ cp .env.example .env
 
 ### Development Server
 
-Start the API server with auto-reload:
+Before starting the server, ensure PostgreSQL is running. Choose one approach:
+
+**Option A: Use Docker PostgreSQL (recommended)**
+
+```bash
+docker run -d \
+  --name commerce-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=commerce_demo \
+  -p 5432:5432 \
+  postgres:16
+```
+
+**Option B: Configure connection to existing PostgreSQL**
+
+Update `.env` with your database credentials:
+
+```bash
+DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
+```
+
+**Start the server:**
 
 ```bash
 uvicorn app.main:app --reload
@@ -498,6 +520,13 @@ Browse the interactive API:
 * Swagger UI: `http://127.0.0.1:8000/docs`
 * ReDoc: `http://127.0.0.1:8000/redoc`
 * Health endpoint: `http://127.0.0.1:8000/health`
+
+**Troubleshooting: `ConnectionRefusedError`**
+
+If you see `Connection refused [Errno 111]`, PostgreSQL is not accessible. Verify:
+* Docker container is running: `docker ps | grep commerce-postgres`
+* Connection string in `.env` is correct
+* Firewall/network allows connection to database port (5432)
 
 ### Testing
 
@@ -516,7 +545,9 @@ The test suite includes **33 integration tests** covering:
 * Advanced search with filters and pagination
 * Error handling (404, 409, 422 responses)
 
-Run all tests (requires real PostgreSQL container via testcontainers):
+**Note:** Tests automatically provision a PostgreSQL container via testcontainers — no manual database setup required.
+
+Run all tests:
 
 ```bash
 pytest -q
@@ -536,3 +567,10 @@ Run with coverage:
 ```bash
 pytest --cov=app --cov-report=term-missing
 ```
+
+**Troubleshooting: Test Container Issues**
+
+If tests fail to start PostgreSQL container:
+* Ensure Docker is running: `docker ps`
+* Grant permission: `sudo usermod -aG docker $USER` (then log out/in)
+* Check internet: testcontainers will download PostgreSQL image on first run (~100MB)
