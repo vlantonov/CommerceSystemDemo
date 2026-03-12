@@ -465,6 +465,8 @@ Validation error response:
 
 ## 8. Run and Test
 
+### Setup
+
 1. Create and activate a virtual environment:
 
 ```bash
@@ -484,18 +486,53 @@ pip install -e '.[dev]'
 cp .env.example .env
 ```
 
-4. Start the API server:
+### Development Server
+
+Start the API server with auto-reload:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-5. Open docs:
+Browse the interactive API:
 * Swagger UI: `http://127.0.0.1:8000/docs`
+* ReDoc: `http://127.0.0.1:8000/redoc`
 * Health endpoint: `http://127.0.0.1:8000/health`
 
-6. Run tests (real PostgreSQL container required):
+### Testing
+
+The test suite includes **33 integration tests** covering:
+
+**Service Layer Tests (4 tests)** — `tests/test_search.py`
+* Category subtree filtering with descendants
+* Inclusive price range filtering
+* Title and exact SKU matching
+* Pagination with proper totals
+
+**Endpoint Integration Tests (29 tests)** — `tests/test_api.py`
+* CRUD operations for categories and products
+* SKU normalization and validation
+* Category hierarchy and cascade delete
+* Advanced search with filters and pagination
+* Error handling (404, 409, 422 responses)
+
+Run all tests (requires real PostgreSQL container via testcontainers):
 
 ```bash
 pytest -q
+```
+
+Expected output: `33 passed`
+
+Run specific test file:
+
+```bash
+pytest tests/test_search.py -q    # Service layer tests
+pytest tests/test_api.py -q       # Endpoint integration tests
+```
+
+Run with coverage:
+
+```bash
+pytest --cov=app --cov-report=term-missing
 ```
