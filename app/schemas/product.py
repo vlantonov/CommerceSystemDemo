@@ -15,9 +15,11 @@ class ProductBase(BaseModel):
     price: Decimal = Field(ge=Decimal("0"))
     category_id: int | None = None
 
-    @field_validator("sku")
+    @field_validator("sku", mode="before")
     @classmethod
     def normalize_sku(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
         return value.upper()
 
 
@@ -33,11 +35,11 @@ class ProductUpdate(BaseModel):
     price: Decimal | None = Field(default=None, ge=Decimal("0"))
     category_id: int | None = None
 
-    @field_validator("sku")
+    @field_validator("sku", mode="before")
     @classmethod
     def normalize_optional_sku(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
+        if value is None or not isinstance(value, str):
+            return value
         return value.upper()
 
 
