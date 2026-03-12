@@ -148,3 +148,58 @@ The **FastAPI** was chosen:
 * Decision: Real database (PostgreSQL) via test containers or an in-process test database.
 * Mock DB is fast, but doesn't test real SQL, recursive CTEs, cascades, indexes
 * Real DB (test container) - tests actual queries, constraints, cascade behavior. However it is slower (~seconds startup)
+
+## 5. High-Level Design
+
+The service is best modeled as a layered API application. The API layer handles transport concerns, Pydantic enforces request and response contracts, application services own business rules, and the persistence layer isolates database access. PostgreSQL remains the system of record for products and categories, while product images are stored externally and referenced by URL.
+
+```mermaid
+flowchart TB
+   client[Clients\nWeb UI / Admin UI / External Systems]
+   docs[OpenAPI / Swagger UI]
+
+   client --> api
+   docs --> api
+
+   subgraph service[Commerce Service]
+      direction TB
+
+      api[FastAPI Routers\nProducts / Categories / Search]
+      schemas[Pydantic Schemas\nValidation / Normalization / Serialization]
+      app[Application Services\nCRUD / Search / Category Tree Rules]
+      repo[Persistence Layer\nSQLAlchemy 2.0 Async Repositories]
+      search[Search Composition\nName or SKU / Price Range / Category Subtree / Pagination]
+
+      api --> schemas
+      schemas --> app
+      app --> repo
+      app --> search
+      search --> repo
+   end
+
+   subgraph data[Data Platform]
+      direction LR
+
+      db[(PostgreSQL)]
+      images[(Object Storage or CDN\nImage files)]
+      idx[Index Strategy\nSKU unique / price / category_id / parent_id / trigram title]
+      tree[Category Hierarchy\nAdjacency list + recursive CTE]
+      integrity[Referential Integrity\ncategory.parent_id ON DELETE CASCADE\nproduct.category_id ON DELETE SET NULL]
+
+      db --- idx
+      db --- tree
+      db --- integrity
+   end
+
+   repo --> db
+   repo --> images
+
+   tests[Integration Tests\npytest + real PostgreSQL test DB] --> api
+```
+
+### 5.1. Architecture Notes
+* Layered design keeps request validation, business logic, and persistence concerns separate.
+* PostgreSQL is the source of truth for products, categories, prices, and relational constraints.
+* Product image binaries should live outside the relational database; only image URLs and metadata belong in the service data model.
+* Category subtree search is implemented through recursive CTE queries over an adjacency-list category structure.
+* Search performance relies on targeted indexes and offset-based pagination for the current scale of tens of thousands of products.
