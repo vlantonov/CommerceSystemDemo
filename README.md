@@ -98,6 +98,20 @@ The **FastAPI** was chosen:
    * [Magento categories query](https://developer.adobe.com/commerce/webapi/graphql/schema/products/queries/categories/)
 
 ### 4.6. The parent field of the category
+* Adjacency List with recursive CTE (Common Table Expression) queries. Self-referencing foreign key, nullable.
+* DB column - `parent_id INTEGER REFERENCES category(id) ON DELETE CASCADE`
+* Root categories - `parent_id IS NULL`
+* Max depth: 100 (validated at the application layer before insert/update)
+* Subtree queries: PostgreSQL **recursive CTEs** (`WITH RECURSIVE`)
+* Cascade delete: `ON DELETE CASCADE` at DB level — deleting a parent removes all descendants. Product unlinking handled via `ON DELETE SET NULL` on `product.category_id`.
+* For the "search returns child results too" requirement, the recursive CTE fetches all descendant category IDs first, then filters products with `WHERE category_id IN (...)`.
+* Why Adjacency List over Materialized Path or Nested Sets?
+   * Simplest model; category count is in the `thousands` — recursive CTEs on PostgreSQL handle this efficiently.
+   * Writes (add/move/delete categories) are O(1) — no tree rebalancing needed.
+   * Max depth of 100 is enforceable at the application layer during writes
+   * Schema: `parent_id = ForeignKey('self', null=True, on_delete=SET_NULL)` — but given the requirement that deleting a parent deletes all children, use `on_delete=CASCADE` for the FK constraint
+* References:
+   * [PostgreSQL recursive CTE docs](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-RECURSIVE)
 
 ### 4.7. Pagination of the returned results
 
