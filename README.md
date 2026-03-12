@@ -114,6 +114,19 @@ The **FastAPI** was chosen:
    * [PostgreSQL recursive CTE docs](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-RECURSIVE)
 
 ### 4.7. Pagination of the returned results
+* With tens of thousands of products, pagination is mandatory for the search endpoint
+* Decision: Offset-based pagination with `limit` / `offset` query parameters
+* Dataset is tens of thousands of products — offset/limit with proper indexes performs well within 200 ms.
+* Simpler for clients to implement (random page access).
+* `total` count is cheap with proper indexes on the filtered columns.
+* Trade-off: Results do not need to be sorted (per requirements), so cursor pagination has no anchor advantage.
+* Trade-off: Offset pagination (`LIMIT x OFFSET y`) degrades at large offsets — the DB must scan and discard rows. Avoid for deep pages.
+* Trade-off: Cursor-based (keyset) pagination uses a stable pointer (e.g., `?cursor=<last_id>`) and is `O(1)` regardless of page depth.
+* Trade-off: Cursor-based is production standard when dataset is millions
+* References:
+   * [FastAPI pagination patterns](https://fastapi.tiangolo.com/tutorial/query-params/)
+   * [Stripe API pagination](https://stripe.com/docs/api/pagination)
+   * [Shopify REST API pagination](https://shopify.dev/docs/api/usage/pagination-rest)
 
 ### 4.8. Databse to store products, categories and images
 
