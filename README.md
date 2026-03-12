@@ -145,3 +145,6 @@ The **FastAPI** was chosen:
    * [SQLAlchemy 2.0 async](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
 
 ### 4.9. Unit test for real database or for mock database
+* Decision: Real database (PostgreSQL) via test containers or an in-process test database.
+* Mock DB is fast, but doesn't test real SQL, recursive CTEs, cascades, indexes
+* Real DB (test container) - tests actual queries, constraints, cascade behavior. However it is slower (~seconds startup)
