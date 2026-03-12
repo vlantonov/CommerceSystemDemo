@@ -155,7 +155,7 @@ The service is best modeled as a layered API application. The API layer handles 
 
 ```mermaid
 flowchart TB
-   client[Clients\nWeb UI / Admin UI / External Systems]
+   client[Clients<br/>Web UI / Admin UI / External Systems]
    docs[OpenAPI / Swagger UI]
 
    client --> api
@@ -164,11 +164,11 @@ flowchart TB
    subgraph service[Commerce Service]
       direction TB
 
-      api[FastAPI Routers\nProducts / Categories / Search]
-      schemas[Pydantic Schemas\nValidation / Normalization / Serialization]
-      app[Application Services\nCRUD / Search / Category Tree Rules]
-      repo[Persistence Layer\nSQLAlchemy 2.0 Async Repositories]
-      search[Search Composition\nName or SKU / Price Range / Category Subtree / Pagination]
+      api[FastAPI Routers<br/>Products / Categories / Search]
+      schemas[Pydantic Schemas<br/>Validation / Normalization / Serialization]
+      app[Application Services<br/>CRUD / Search / Category Tree Rules]
+      repo[Persistence Layer<br/>SQLAlchemy 2.0 Async Repositories]
+      search[Search Composition<br/>Name or SKU / Price Range / Category Subtree / Pagination]
 
       api --> schemas
       schemas --> app
@@ -181,10 +181,10 @@ flowchart TB
       direction LR
 
       db[(PostgreSQL)]
-      images[(Object Storage or CDN\nImage files)]
-      idx[Index Strategy\nSKU unique / price / category_id / parent_id / trigram title]
-      tree[Category Hierarchy\nAdjacency list + recursive CTE]
-      integrity[Referential Integrity\ncategory.parent_id ON DELETE CASCADE\nproduct.category_id ON DELETE SET NULL]
+      images[(Object Storage or CDN<br/>Image files)]
+      idx[Index Strategy<br/>SKU unique / price / category_id / parent_id / trigram title]
+      tree[Category Hierarchy<br/>Adjacency list + recursive CTE]
+      integrity[Referential Integrity<br/>category.parent_id ON DELETE CASCADE<br/>product.category_id ON DELETE SET NULL]
 
       db --- idx
       db --- tree
@@ -194,7 +194,7 @@ flowchart TB
    repo --> db
    repo --> images
 
-   tests[Integration Tests\npytest + real PostgreSQL test DB] --> api
+   tests[Integration Tests<br/>pytest + real PostgreSQL test DB] --> api
 ```
 
 ### 5.1. Architecture Notes
