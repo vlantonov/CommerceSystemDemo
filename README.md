@@ -25,6 +25,12 @@
    * [6.1. Entity Relationship Diagram](#61-entity-relationship-diagram)
    * [6.2. Schema Notes](#62-schema-notes)
    * [6.3. Constraints and Indexes](#63-constraints-and-indexes)
+* [7. API Design](#7-api-design)
+   * [7.1. API Conventions](#71-api-conventions)
+   * [7.2. Category Endpoints](#72-category-endpoints)
+   * [7.3. Product Endpoints](#73-product-endpoints)
+   * [7.4. Search Endpoint](#74-search-endpoint)
+   * [7.5. Request and Response Schemas](#75-request-and-response-schemas)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -319,4 +325,139 @@ CREATE INDEX idx_category_parent_id ON category(parent_id);
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX idx_product_title_trgm ON product USING gin (title gin_trgm_ops);
+```
+
+## 7. API Design
+
+The API follows REST conventions over JSON and is designed for low-latency filtering at scale. Validation is handled by Pydantic, and the generated OpenAPI document is the contract source for clients.
+
+### 7.1. API Conventions
+* Base path: `/api/v1`
+* Content type: `application/json`
+* No authentication layer is required in this task.
+* Timestamps use ISO-8601 UTC format (example: `2026-03-12T10:20:30Z`).
+* All list/search responses are wrapped in a paginated envelope.
+* Validation errors return HTTP `422`; missing resources return HTTP `404`; uniqueness conflicts return HTTP `409`.
+
+### 7.2. Category Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/categories` | Create a category |
+| `GET` | `/api/v1/categories/{category_id}` | Get category by id |
+| `PATCH` | `/api/v1/categories/{category_id}` | Update category name and or parent |
+| `DELETE` | `/api/v1/categories/{category_id}` | Delete category subtree |
+| `GET` | `/api/v1/categories` | List categories with pagination |
+
+### 7.3. Product Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/products` | Create a product |
+| `GET` | `/api/v1/products/{product_id}` | Get product by id |
+| `PATCH` | `/api/v1/products/{product_id}` | Update product fields |
+| `DELETE` | `/api/v1/products/{product_id}` | Delete product |
+| `GET` | `/api/v1/products` | List products with pagination |
+
+### 7.4. Search Endpoint
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/products/search` | Filter products by name or SKU, price range, and category subtree |
+
+Query parameters:
+* `q`: optional string for partial title match or exact SKU match.
+* `min_price`: optional decimal, inclusive lower bound.
+* `max_price`: optional decimal, inclusive upper bound.
+* `category_id`: optional integer category filter; includes all descendants.
+* `limit`: integer, default `20`, max `100`.
+* `offset`: integer, default `0`.
+
+### 7.5. Request and Response Schemas
+
+Category create request:
+
+```json
+{
+   "name": "Laptops",
+   "parent_id": 12
+}
+```
+
+Category response:
+
+```json
+{
+   "id": 34,
+   "name": "Laptops",
+   "parent_id": 12,
+   "created_at": "2026-03-12T10:20:30Z",
+   "updated_at": "2026-03-12T10:20:30Z"
+}
+```
+
+Product create request:
+
+```json
+{
+   "title": "Ultrabook X13",
+   "description": "13-inch ultrabook with 16GB RAM",
+   "image_url": "https://cdn.example.com/products/x13.webp",
+   "sku": "UBX13-16-512",
+   "price": "1299.99",
+   "category_id": 34
+}
+```
+
+Product response:
+
+```json
+{
+   "id": 501,
+   "title": "Ultrabook X13",
+   "description": "13-inch ultrabook with 16GB RAM",
+   "image_url": "https://cdn.example.com/products/x13.webp",
+   "sku": "UBX13-16-512",
+   "price": "1299.99",
+   "category_id": 34,
+   "created_at": "2026-03-12T10:21:00Z",
+   "updated_at": "2026-03-12T10:21:00Z"
+}
+```
+
+Search response:
+
+```json
+{
+   "items": [
+      {
+         "id": 501,
+         "title": "Ultrabook X13",
+         "description": "13-inch ultrabook with 16GB RAM",
+         "image_url": "https://cdn.example.com/products/x13.webp",
+         "sku": "UBX13-16-512",
+         "price": "1299.99",
+         "category_id": 34,
+         "created_at": "2026-03-12T10:21:00Z",
+         "updated_at": "2026-03-12T10:21:00Z"
+      }
+   ],
+   "total": 1,
+   "limit": 20,
+   "offset": 0
+}
+```
+
+Validation error response:
+
+```json
+{
+   "detail": [
+      {
+         "loc": ["body", "sku"],
+         "msg": "String should match pattern '^[A-Z0-9_-]{1,100}$'",
+         "type": "string_pattern_mismatch"
+      }
+   ]
+}
 ```
