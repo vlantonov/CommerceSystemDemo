@@ -129,5 +129,19 @@ The **FastAPI** was chosen:
    * [Shopify REST API pagination](https://shopify.dev/docs/api/usage/pagination-rest)
 
 ### 4.8. Databse to store products, categories and images
+* PostgreSQL with `asyncpg` (via SQLAlchemy 2.0 async) gives the best combination of correctness (exact decimals, recursive CTEs, cascading deletes) and performance (async I/O, rich indexing).
+* Supports: Recursive CTEs , `DECIMAL` precision, full UTF-8, concurrent writes, async driver for FastAPI and index types
+* SQLite has limited decimal precision, no support of concurrent writes and no index types
+* MySQL requires explicit config for UTF-8 and has limited index types
+* Key indexes:
+   * `product.sku` — unique B-tree
+   * `product.category_id` — B-tree (for category filter + cascade unlink)
+   * `product.price` — B-tree (for range queries)
+   * `product.title` — GIN trigram index (`pg_trgm`) for partial-match search
+   * `category.parent_id` — B-tree (for recursive CTE traversal)
+* References:
+   * [PostgreSQL numeric](https://www.postgresql.org/docs/current/datatype-numeric.html)
+   * [asyncpg — fast PostgreSQL driver](https://github.com/MagicStack/asyncpg)
+   * [SQLAlchemy 2.0 async](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
 
 ### 4.9. Unit test for real database or for mock database
