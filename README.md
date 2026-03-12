@@ -1,5 +1,27 @@
 # Commerce System Demo
 
+## Table of Contents
+
+* [1. Task description](#1-task-description)
+* [2. Functional requirements](#2-functional-requirements)
+   * [2.1. Models](#21-models)
+      * [2.1.1 Product model](#211-product-model)
+      * [2.1.2 Category model](#212-category-model)
+   * [2.2. Operations](#22-operations)
+* [3. Non-Functional Requirements](#3-non-functional-requirements)
+* [4. Requirements Refinement Decisions](#4-requirements-refinement-decisions)
+   * [4.1. FastAPI or Django framework](#41-fastapi-or-django-framework)
+   * [4.2. Constraints to text fields according to the established practices in existing systems](#42-constraints-to-text-fields-according-to-the-established-practices-in-existing-systems)
+   * [4.3. The format and the storage of the image is to be chosen following the established practices in existing systems](#43-the-format-and-the-storage-of-the-image-is-to-be-chosen-following-the-established-practices-in-existing-systems)
+   * [4.4. The format for the unique product identifier (SKU) is to be chosen following the established practices in existing systems](#44-the-format-for-the-unique-product-identifier-sku-is-to-be-chosen-following-the-established-practices-in-existing-systems)
+   * [4.5. The name of the category constraints](#45-the-name-of-the-category-constraints)
+   * [4.6. The parent field of the category](#46-the-parent-field-of-the-category)
+   * [4.7. Pagination of the returned results](#47-pagination-of-the-returned-results)
+   * [4.8. Databse to store products, categories and images](#48-databse-to-store-products-categories-and-images)
+   * [4.9. Unit test for real database or for mock database](#49-unit-test-for-real-database-or-for-mock-database)
+* [5. High-Level Design](#5-high-level-design)
+   * [5.1. Architecture Notes](#51-architecture-notes)
+
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
 
