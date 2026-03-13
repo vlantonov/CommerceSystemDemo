@@ -1,0 +1,127 @@
+{
+  "id": null,
+  "uid": "commerce-observability-p1",
+  "title": "Commerce Observability - P1 Reliability",
+  "tags": ["commerce", "otel", "priority-1"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request Rate (req/s)",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_http_requests_total[5m]))",
+          "legendFormat": "requests/s"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "In-flight Requests",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(commerce_http_requests_in_flight)",
+          "legendFormat": "in-flight"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Error Rate (req/s) by Class",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_http_errors_total[5m])) by (http_status_class)",
+          "legendFormat": "{{http_status_class}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Unhandled Exceptions (req/s)",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_http_exceptions_total[5m])) by (exception_class)",
+          "legendFormat": "{{exception_class}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "P95 Request Latency (ms)",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(commerce_http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "P95 DB Query Duration (ms)",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(commerce_db_query_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "DB Pool In-use Connections",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(commerce_db_pool_in_use_connections)",
+          "legendFormat": "in-use"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Recent Traces",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "tempo", "uid": "tempo"},
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceqlSearch",
+          "limit": 20,
+          "spss": 3,
+          "tableType": "traces",
+          "filters": []
+        }
+      ]
+    }
+  ]
+}

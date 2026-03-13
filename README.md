@@ -35,6 +35,13 @@
    * [8.1. Setup](#81-setup)
    * [8.2. Development Server](#82-development-server)
    * [8.3. Testing](#83-testing)
+* [9. Observability](#9-observability)
+   * [9.1. What is instrumented](#91-what-is-instrumented)
+   * [9.2. Telemetry flow](#92-telemetry-flow)
+   * [9.3. Local stack](#93-local-stack)
+   * [9.4. Grafana dashboards](#94-grafana-dashboards)
+   * [9.5. Alerting rules (P1)](#95-alerting-rules-p1)
+   * [9.6. How to exercise the dashboards](#96-how-to-exercise-the-dashboards)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -491,9 +498,9 @@ cp .env.example .env
 
 ### 8.2. Development Server
 
-#### Option A: Run app + database with Docker Compose (recommended)
+#### Option A: Run full stack with Docker Compose (recommended)
 
-Build and start both services:
+Build and start the full stack (API, PostgreSQL, OpenTelemetry Collector, Tempo, Prometheus, Grafana):
 
 ```bash
 docker compose up --build
@@ -547,6 +554,9 @@ Browse the interactive API:
 * Swagger UI: `http://127.0.0.1:8000/docs`
 * ReDoc: `http://127.0.0.1:8000/redoc`
 * Health endpoint: `http://127.0.0.1:8000/health`
+* Metrics endpoint: `http://127.0.0.1:8000/metrics`
+* Grafana: `http://127.0.0.1:3000` (`admin` / `admin`)
+* Prometheus: `http://127.0.0.1:9090`
 
 **Troubleshooting: `ConnectionRefusedError`**
 
@@ -602,3 +612,141 @@ If tests fail to start PostgreSQL container:
 * Ensure Docker is running: `docker ps`
 * Grant permission: `sudo usermod -aG docker $USER` (then log out/in)
 * Check internet: testcontainers will download PostgreSQL image on first run (~100MB)
+
+## 9. Observability
+
+### 9.1. What is instrumented
+
+The service is instrumented with OpenTelemetry traces and metrics.
+
+Traces:
+* Incoming FastAPI requests (automatic instrumentation)
+* SQLAlchemy database operations (automatic instrumentation)
+
+Metrics:
+* `commerce_http_request_duration_seconds` - request latency
+* `commerce_http_response_time_seconds` - response time
+* `commerce_http_response_payload_size_bytes` - response payload size
+* `commerce_http_processing_duration_seconds` - route handler processing time
+* `commerce_http_queue_wait_duration_seconds` - queue wait before handler processing
+* `commerce_db_query_duration_seconds` - database query duration
+* `commerce_http_requests_total` - request throughput
+* `commerce_http_requests_in_flight` - in-flight requests
+* `commerce_http_errors_total` - HTTP error responses with status class and type
+* `commerce_http_exceptions_total` - unhandled exception count by class
+* `commerce_db_pool_in_use_connections` - DB connections checked out from pool
+* `commerce_search_requests_total` - search request throughput
+* `commerce_search_result_count` - search result count distribution
+* `commerce_search_zero_results_total` - zero-result search count
+* `commerce_product_mutations_total` - product create update delete outcomes
+* `commerce_category_mutations_total` - category create update delete outcomes
+* `commerce_category_validation_failures_total` - category validation failures by reason
+
+### 9.2. Telemetry flow
+
+Observability is wired end to end through the local Docker stack:
+
+* The FastAPI application exposes Prometheus metrics on `/metrics` through the OpenTelemetry Prometheus exporter.
+* The application also emits OTLP traces to the OpenTelemetry Collector at `otel-collector:4317`.
+* The collector forwards traces to Tempo and exposes its own runtime metrics on port `8888`.
+* Prometheus scrapes the application metrics endpoint and the collector metrics endpoint every 5 seconds.
+* Grafana reads metrics from Prometheus and traces from Tempo through provisioned datasources.
+
+Telemetry path summary:
+
+```text
+FastAPI app
+   |- /metrics -> Prometheus
+   '- OTLP traces -> OpenTelemetry Collector -> Tempo -> Grafana
+```
+
+### 9.3. Local stack
+
+`docker-compose.yml` runs an observability stack:
+* `otel-collector` receives OTLP traces from the API and forwards to Tempo
+* `tempo` stores traces
+* `prometheus` scrapes `app:8000/metrics`
+* `grafana` is pre-provisioned with Prometheus and Tempo datasources
+
+Useful endpoints:
+* API: `http://127.0.0.1:8000`
+* Metrics: `http://127.0.0.1:8000/metrics`
+* Grafana: `http://127.0.0.1:3000`
+* Prometheus: `http://127.0.0.1:9090`
+* Tempo API: `http://127.0.0.1:3200`
+
+Relevant configuration files:
+* `app/observability/setup.py` initializes tracing, metrics, middleware, and the `/metrics` endpoint
+* `app/observability/middleware.py` records request lifecycle metrics and error classifications
+* `app/observability/db.py` instruments SQLAlchemy and DB pool usage
+* `observability/otel-collector-config.yaml` configures OTLP ingestion and exporter pipeline
+* `observability/prometheus.yml` configures scrape jobs and alert rule loading
+* `observability/grafana/provisioning` provisions Grafana datasources and dashboards
+
+### 9.4. Grafana dashboards
+
+A ready-to-use dashboard set is provisioned from:
+* `observability/grafana/dashboards/commerce-observability.json` (P1 reliability)
+* `observability/grafana/dashboards/commerce-observability-p2.json` (P2 domain)
+* `observability/grafana/dashboards/commerce-observability-p3.json` (P3 diagnostics)
+
+Priority split:
+* **P1 Reliability**: request rate, in-flight requests, error rate, exception rate, p95 request latency, p95 DB query duration, DB pool pressure, recent traces
+* **P2 Domain**: search traffic and quality, mutation outcomes for products and categories, category validation failures
+* **P3 Diagnostics**: latency decomposition, payload sizes, DB query duration by operation, HTTP error type breakdown
+
+### 9.5. Alerting rules (P1)
+
+Prometheus alert rules are defined in:
+* `observability/prometheus-alerts/commerce-alerts.yml`
+
+Prometheus is configured to load alert rule files from:
+* `observability/prometheus.yml` via `rule_files: /etc/prometheus/alerts/*.yml`
+
+Compose mounts the alert rules directory into the Prometheus container:
+* `docker-compose.yml` maps `./observability/prometheus-alerts` to `/etc/prometheus/alerts`
+
+Configured P1 alerts:
+* `CommerceHigh5xxRate` - 5xx ratio above 5% for 5 minutes
+* `CommerceHighP95RequestLatency` - global p95 latency above 350 ms for 10 minutes
+* `CommerceEndpointP95Over200ms` - per-endpoint p95 latency above 200 ms for 10 minutes (non-functional requirement)
+* `CommerceSustainedHighInFlightRequests` - in-flight requests above 50 for 10 minutes
+* `CommerceDbPoolPressure` - DB pool in-use connections above 12 for 10 minutes
+
+### 9.6. How to exercise the dashboards
+
+The dashboards stay sparse until the service receives traffic. For a quick local smoke test:
+
+1. Start the full stack:
+
+```bash
+docker compose up --build -d
+```
+
+2. Generate load against the API:
+
+```bash
+.venv/bin/python scripts/load_test.py --duration 60 --workers 8
+```
+
+If the catalog is already seeded, skip the initial setup phase:
+
+```bash
+.venv/bin/python scripts/load_test.py --skip-seed --duration 60 --workers 8
+```
+
+3. Open the tools:
+* Grafana: `http://127.0.0.1:3000`
+* Prometheus: `http://127.0.0.1:9090`
+* Metrics endpoint: `http://127.0.0.1:8000/metrics`
+
+4. Verify that custom application metrics are present:
+
+```bash
+curl -s http://127.0.0.1:8000/metrics | grep '^commerce_'
+```
+
+Notes:
+* After instrumentation changes, rebuild the application container so the running service exposes the new metrics.
+* Some counters appear only after the first matching event is observed. Until then, Prometheus and Grafana can show no data for that series.
+* The load test intentionally produces successful traffic and controlled 4xx scenarios so the P1, P2, and P3 dashboards all receive data.

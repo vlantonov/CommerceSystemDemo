@@ -11,6 +11,15 @@ class Settings(BaseSettings):
     auto_create_schema: bool = True
     default_limit: int = 20
     max_limit: int = 100
+    telemetry_enabled: bool = True
+    otel_service_name: str = "commerce-system-demo"
+    otel_environment: str = "dev"
+    otel_resource_attributes: str = ""
+    otel_exporter_otlp_endpoint: str | None = None
+    otel_exporter_otlp_insecure: bool = True
+    otel_metrics_enabled: bool = True
+    otel_metrics_path: str = "/metrics"
+    otel_trace_excluded_urls: str = ""
 
 
 @lru_cache

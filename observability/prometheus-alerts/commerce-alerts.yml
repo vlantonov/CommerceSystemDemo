@@ -1,0 +1,65 @@
+groups:
+  - name: commerce-p1-alerts
+    rules:
+      - alert: CommerceHigh5xxRate
+        expr: |
+          (
+            sum(rate(commerce_http_errors_total{http_status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(commerce_http_requests_total[5m])), 0.001)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          priority: p1
+        annotations:
+          summary: "High 5xx error rate"
+          description: "5xx error ratio is above 5% for at least 5 minutes."
+
+      - alert: CommerceHighP95RequestLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(commerce_http_request_duration_seconds_bucket{http_route!="/health",http_route!="/metrics"}[5m])) by (le)
+          ) > 0.35
+        for: 10m
+        labels:
+          severity: warning
+          priority: p1
+        annotations:
+          summary: "High p95 request latency"
+          description: "Global p95 request latency is above 350ms for at least 10 minutes."
+
+      - alert: CommerceEndpointP95Over200ms
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(commerce_http_request_duration_seconds_bucket{http_route!="/health",http_route!="/metrics"}[5m])) by (le, http_route)
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          priority: p1
+        annotations:
+          summary: "Endpoint p95 latency exceeds 200ms"
+          description: "Endpoint {{ $labels.http_route }} has p95 latency above 200ms for at least 10 minutes."
+
+      - alert: CommerceSustainedHighInFlightRequests
+        expr: sum(commerce_http_requests_in_flight) > 50
+        for: 10m
+        labels:
+          severity: warning
+          priority: p1
+        annotations:
+          summary: "Sustained high in-flight requests"
+          description: "In-flight HTTP requests are above 50 for at least 10 minutes."
+
+      - alert: CommerceDbPoolPressure
+        expr: sum(commerce_db_pool_in_use_connections) > 12
+        for: 10m
+        labels:
+          severity: warning
+          priority: p1
+        annotations:
+          summary: "Database pool pressure"
+          description: "DB pool in-use connections are above 12 for at least 10 minutes."

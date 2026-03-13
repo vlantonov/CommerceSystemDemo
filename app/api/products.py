@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.models.product import Product
+from app.observability.metrics import product_mutations_total
 from app.schemas.common import PaginatedResponse
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 
@@ -23,8 +24,10 @@ async def create_product(payload: ProductCreate, session: AsyncSession = Depends
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
+        product_mutations_total.add(1, {"operation": "create", "result": "conflict"})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="SKU must be unique") from exc
     await session.refresh(product)
+    product_mutations_total.add(1, {"operation": "create", "result": "success"})
     return ProductRead.model_validate(product)
 
 
@@ -53,6 +56,7 @@ async def update_product(
 ) -> ProductRead:
     product = await session.get(Product, product_id)
     if product is None:
+        product_mutations_total.add(1, {"operation": "update", "result": "not_found"})
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
     updates = payload.model_dump(exclude_unset=True)
@@ -63,9 +67,11 @@ async def update_product(
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
+        product_mutations_total.add(1, {"operation": "update", "result": "conflict"})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="SKU must be unique") from exc
 
     await session.refresh(product)
+    product_mutations_total.add(1, {"operation": "update", "result": "success"})
     return ProductRead.model_validate(product)
 
 
@@ -73,6 +79,8 @@ async def update_product(
 async def delete_product(product_id: int, session: AsyncSession = Depends(get_session)) -> None:
     product = await session.get(Product, product_id)
     if product is None:
+        product_mutations_total.add(1, {"operation": "delete", "result": "not_found"})
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     await session.delete(product)
     await session.commit()
+    product_mutations_total.add(1, {"operation": "delete", "result": "success"})

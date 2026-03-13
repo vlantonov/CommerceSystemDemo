@@ -23,17 +23,78 @@ services:
       dockerfile: Dockerfile
     container_name: commerce-app
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/commerce_demo
       API_PREFIX: /api/v1
       AUTO_CREATE_SCHEMA: "true"
       DEFAULT_LIMIT: "20"
       MAX_LIMIT: "100"
+      TELEMETRY_ENABLED: "true"
+      OTEL_SERVICE_NAME: commerce-system-demo
+      OTEL_ENVIRONMENT: docker
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      OTEL_METRICS_ENABLED: "true"
+      OTEL_METRICS_PATH: /metrics
+      OTEL_TRACE_EXCLUDED_URLS: /metrics,/health
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: commerce-otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      - tempo
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8888:8888"
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: commerce-tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+    ports:
+      - "3200:3200"
+
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    container_name: commerce-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus-alerts:/etc/prometheus/alerts:ro
+    depends_on:
+      - app
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: commerce-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/grafana/provisioning/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - tempo
+    ports:
+      - "3000:3000"
 
 volumes:
   postgres_data:
