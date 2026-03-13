@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import Settings
 from app.observability.db import instrument_engine
+from app.observability.logging import initialize_logging
 from app.observability.middleware import ObservabilityMetricsMiddleware
 
 _METRICS_PROVIDER_CONFIGURED = False
@@ -86,6 +87,8 @@ def _add_metrics_endpoint(app: FastAPI, settings: Settings) -> None:
 
 
 def initialize_app_observability(app: FastAPI, settings: Settings) -> None:
+    initialize_logging(settings)
+
     if not settings.telemetry_enabled:
         return
 

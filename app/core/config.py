@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     otel_metrics_enabled: bool = True
     otel_metrics_path: str = "/metrics"
     otel_trace_excluded_urls: str = ""
+    log_level: str = "INFO"
 
 
 @lru_cache

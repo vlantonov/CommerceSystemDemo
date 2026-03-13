@@ -67,6 +67,27 @@ services:
     ports:
       - "3200:3200"
 
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: commerce-loki
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: commerce-promtail
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    volumes:
+      - ./observability/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+
   prometheus:
     image: prom/prometheus:v2.53.1
     container_name: commerce-prometheus
@@ -93,8 +114,10 @@ services:
     depends_on:
       - prometheus
       - tempo
+      - loki
     ports:
       - "3000:3000"
 
 volumes:
   postgres_data:
+  loki_data:

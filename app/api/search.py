@@ -1,4 +1,5 @@
 from decimal import Decimal
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,7 @@ from app.schemas.product import ProductRead, ProductSearchResponse
 from app.services.product_service import search_products
 
 router = APIRouter()
+logger = logging.getLogger("app.search")
 
 
 @router.get("/search", response_model=ProductSearchResponse)
@@ -29,6 +31,10 @@ async def search_products_endpoint(
     search_requests_total.add(1, search_attributes)
 
     if min_price is not None and max_price is not None and min_price > max_price:
+        logger.warning(
+            "search_invalid_price_range",
+            extra={"min_price": str(min_price), "max_price": str(max_price)},
+        )
         raise HTTPException(status_code=422, detail="min_price cannot be greater than max_price")
 
     products, total = await search_products(
@@ -44,6 +50,20 @@ async def search_products_endpoint(
     search_result_count.record(total, search_attributes)
     if total == 0:
         search_zero_results_total.add(1, search_attributes)
+
+    logger.info(
+        "search_completed",
+        extra={
+            "q_present": q is not None and q.strip() != "",
+            "min_price": str(min_price) if min_price is not None else None,
+            "max_price": str(max_price) if max_price is not None else None,
+            "category_id": category_id,
+            "limit": limit,
+            "offset": offset,
+            "result_count": len(products),
+            "total": total,
+        },
+    )
 
     return ProductSearchResponse(
         items=[ProductRead.model_validate(item) for item in products],

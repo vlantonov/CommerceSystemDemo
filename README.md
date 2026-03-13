@@ -542,6 +542,7 @@ Or configure connection to an existing PostgreSQL instance by updating `.env`:
 
 ```bash
 DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
+LOG_LEVEL=INFO
 ```
 
 Start the server locally:
@@ -617,11 +618,19 @@ If tests fail to start PostgreSQL container:
 
 ### 9.1. What is instrumented
 
-The service is instrumented with OpenTelemetry traces and metrics.
+The service is instrumented with OpenTelemetry traces and metrics, plus structured JSON logs.
 
 Traces:
 * Incoming FastAPI requests (automatic instrumentation)
 * SQLAlchemy database operations (automatic instrumentation)
+
+Logs:
+* Request completion events with method, route, status code, duration, payload size, and client IP
+* Product and category mutation events for create, update, and delete outcomes
+* Search summary events including filter presence and result totals
+* Error and validation failure events at warning/error levels
+* Log-to-trace correlation via `trace_id` and `span_id` fields in every log record
+* Configurable minimum log level via `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`)
 
 Metrics:
 * `commerce_http_request_duration_seconds` - request latency
@@ -646,16 +655,19 @@ Metrics:
 
 Observability is wired end to end through the local Docker stack:
 
+* The FastAPI application emits structured JSON logs to stdout.
+* Promtail scrapes Docker container log files and pushes logs to Loki.
 * The FastAPI application exposes Prometheus metrics on `/metrics` through the OpenTelemetry Prometheus exporter.
 * The application also emits OTLP traces to the OpenTelemetry Collector at `otel-collector:4317`.
 * The collector forwards traces to Tempo and exposes its own runtime metrics on port `8888`.
 * Prometheus scrapes the application metrics endpoint and the collector metrics endpoint every 5 seconds.
-* Grafana reads metrics from Prometheus and traces from Tempo through provisioned datasources.
+* Grafana reads metrics from Prometheus, traces from Tempo, and logs from Loki through provisioned datasources.
 
 Telemetry path summary:
 
 ```text
 FastAPI app
+   |- structured JSON logs -> stdout -> Promtail -> Loki -> Grafana
    |- /metrics -> Prometheus
    '- OTLP traces -> OpenTelemetry Collector -> Tempo -> Grafana
 ```
@@ -665,8 +677,10 @@ FastAPI app
 `docker-compose.yml` runs an observability stack:
 * `otel-collector` receives OTLP traces from the API and forwards to Tempo
 * `tempo` stores traces
+* `loki` stores logs
+* `promtail` ships container logs to Loki
 * `prometheus` scrapes `app:8000/metrics`
-* `grafana` is pre-provisioned with Prometheus and Tempo datasources
+* `grafana` is pre-provisioned with Prometheus, Tempo, and Loki datasources
 
 Useful endpoints:
 * API: `http://127.0.0.1:8000`
@@ -674,12 +688,16 @@ Useful endpoints:
 * Grafana: `http://127.0.0.1:3000`
 * Prometheus: `http://127.0.0.1:9090`
 * Tempo API: `http://127.0.0.1:3200`
+* Loki API: `http://127.0.0.1:3100`
 
 Relevant configuration files:
+* `app/observability/logging.py` configures structured JSON logging and trace/span correlation fields
 * `app/observability/setup.py` initializes tracing, metrics, middleware, and the `/metrics` endpoint
 * `app/observability/middleware.py` records request lifecycle metrics and error classifications
 * `app/observability/db.py` instruments SQLAlchemy and DB pool usage
 * `observability/otel-collector-config.yaml` configures OTLP ingestion and exporter pipeline
+* `observability/loki-config.yaml` configures Loki storage and ingestion
+* `observability/promtail-config.yaml` configures container log scraping and shipping to Loki
 * `observability/prometheus.yml` configures scrape jobs and alert rule loading
 * `observability/grafana/provisioning` provisions Grafana datasources and dashboards
 
@@ -693,7 +711,7 @@ A ready-to-use dashboard set is provisioned from:
 Priority split:
 * **P1 Reliability**: request rate, in-flight requests, error rate, exception rate, p95 request latency, p95 DB query duration, DB pool pressure, recent traces
 * **P2 Domain**: search traffic and quality, mutation outcomes for products and categories, category validation failures
-* **P3 Diagnostics**: latency decomposition, payload sizes, DB query duration by operation, HTTP error type breakdown
+* **P3 Diagnostics**: latency decomposition, payload sizes, DB query duration by operation, HTTP error type breakdown, prebuilt Loki log panels for `commerce-app` warnings/errors, and request latency buckets derived from structured logs
 
 ### 9.5. Alerting rules (P1)
 
@@ -739,11 +757,20 @@ If the catalog is already seeded, skip the initial setup phase:
 * Grafana: `http://127.0.0.1:3000`
 * Prometheus: `http://127.0.0.1:9090`
 * Metrics endpoint: `http://127.0.0.1:8000/metrics`
+* Loki ready check: `http://127.0.0.1:3100/ready`
 
 4. Verify that custom application metrics are present:
 
 ```bash
 curl -s http://127.0.0.1:8000/metrics | grep '^commerce_'
+```
+
+5. Verify that logs are queryable in Loki:
+
+```bash
+curl -G -s "http://127.0.0.1:3100/loki/api/v1/query_range" \
+   --data-urlencode 'query={container="commerce-app"}' \
+   --data-urlencode 'limit=20'
 ```
 
 Notes:

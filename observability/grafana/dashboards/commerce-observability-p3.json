@@ -91,6 +91,53 @@
           "legendFormat": "{{error_type}}"
         }
       ]
+    },
+    {
+      "id": 7,
+      "type": "logs",
+      "title": "Commerce App Errors (Logs)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{job=\"docker\"} | json | logger=\"app.request\" | level =~ \"WARNING|ERROR|CRITICAL\"",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Request Latency Buckets from Logs (5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({job=\"docker\"} | json | logger=\"app.request\" | message=\"request_completed\" | duration_ms <= 50 [5m]))",
+          "legendFormat": "<= 50ms",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(count_over_time({job=\"docker\"} | json | logger=\"app.request\" | message=\"request_completed\" | duration_ms > 50 | duration_ms <= 100 [5m]))",
+          "legendFormat": "50-100ms",
+          "queryType": "range"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(count_over_time({job=\"docker\"} | json | logger=\"app.request\" | message=\"request_completed\" | duration_ms > 100 | duration_ms <= 200 [5m]))",
+          "legendFormat": "100-200ms",
+          "queryType": "range"
+        },
+        {
+          "refId": "D",
+          "expr": "sum(count_over_time({job=\"docker\"} | json | logger=\"app.request\" | message=\"request_completed\" | duration_ms > 200 [5m]))",
+          "legendFormat": "> 200ms",
+          "queryType": "range"
+        }
+      ]
     }
   ]
 }

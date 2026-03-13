@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from time import perf_counter
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -43,6 +44,7 @@ class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
         finally:
             end_time = perf_counter()
             request_duration = end_time - request.state.ingress_start
+            duration_ms = request_duration * 1000
 
             route = request.scope.get("route")
             route_path = getattr(route, "path", request.url.path)
@@ -79,6 +81,29 @@ class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
                 )
 
             http_requests_in_flight.add(-1, in_flight_attributes)
+
+            request_logger = logging.getLogger("app.request")
+            log_level = logging.INFO
+            if status_code >= 500:
+                log_level = logging.ERROR
+            elif status_code >= 400:
+                log_level = logging.WARNING
+
+            request_logger.log(
+                log_level,
+                "request_completed",
+                extra={
+                    "http_method": request.method,
+                    "http_route": route_path,
+                    "http_path": request.url.path,
+                    "http_status_code": status_code,
+                    "duration_ms": round(duration_ms, 3),
+                    "response_size_bytes": payload_size,
+                    "client_ip": request.client.host if request.client else "",
+                    "error_type": _classify_error_type(status_code) if status_code >= 400 else "",
+                    "exception_class": exception_class or "",
+                },
+            )
 
 
 def _classify_error_type(status_code: int) -> str:

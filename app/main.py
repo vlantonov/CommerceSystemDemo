@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 
@@ -12,17 +13,23 @@ from app.observability import (
     initialize_database_observability,
 )
 
+logger = logging.getLogger("app.lifecycle")
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     initialize_database(settings.database_url)
     initialize_database_observability(get_engine(), settings)
+    logger.info("application_startup", extra={"database_initialized": True})
 
     if settings.auto_create_schema:
         await create_schema()
+        logger.info("database_schema_created")
 
     yield
+
+    logger.info("application_shutdown")
 
 
 def create_app() -> FastAPI:
