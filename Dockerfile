@@ -65,4 +65,4 @@ ENV DATABASE_URL="postgresql+asyncpg://postgres:postgres@db:5432/commerce_demo" 
     DEFAULT_LIMIT="20" \
     MAX_LIMIT="100"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
