@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/commerce_demo"
-    database_pool_size: int = 20
-    database_max_overflow: int = 20
+    database_pool_size: int = 10
+    database_max_overflow: int = 10
     database_pool_timeout: int = 5
     database_pool_pre_ping: bool = True
     database_pool_recycle: int = 1800

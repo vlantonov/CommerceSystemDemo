@@ -65,4 +65,9 @@ ENV DATABASE_URL="postgresql+asyncpg://postgres:postgres@db:5432/commerce_demo" 
     DEFAULT_LIMIT="20" \
     MAX_LIMIT="100"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# WEB_CONCURRENCY controls the number of uvicorn worker processes.
+# Platforms that auto-detect CPUs will set this automatically;
+# fall back to 2 workers when not set.
+ENV WEB_CONCURRENCY=2
+
+CMD uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY}
