@@ -491,29 +491,53 @@ cp .env.example .env
 
 ### 8.2. Development Server
 
-Before starting the server, ensure PostgreSQL is running. Choose one approach:
+#### Option A: Run app + database with Docker Compose (recommended)
 
-**Option A: Use Docker PostgreSQL (recommended)**
+Build and start both services:
+
+```bash
+docker compose up --build
+```
+
+Run in detached mode:
+
+```bash
+docker compose up --build -d
+```
+
+Stop services:
+
+```bash
+docker compose down
+```
+
+Stop services and remove the PostgreSQL volume:
+
+```bash
+docker compose down -v
+```
+
+#### Option B: Run app locally against PostgreSQL
+
+Before starting the server, ensure PostgreSQL is running. You can use Docker for the database only:
 
 ```bash
 docker run -d \
-  --name commerce-postgres \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=commerce_demo \
-  -p 5432:5432 \
-  postgres:16
+   --name commerce-postgres \
+   -e POSTGRES_USER=postgres \
+   -e POSTGRES_PASSWORD=postgres \
+   -e POSTGRES_DB=commerce_demo \
+   -p 5432:5432 \
+   postgres:16
 ```
 
-**Option B: Configure connection to existing PostgreSQL**
-
-Update `.env` with your database credentials:
+Or configure connection to an existing PostgreSQL instance by updating `.env`:
 
 ```bash
 DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
 ```
 
-**Start the server:**
+Start the server locally:
 
 ```bash
 uvicorn app.main:app --reload
@@ -527,6 +551,7 @@ Browse the interactive API:
 **Troubleshooting: `ConnectionRefusedError`**
 
 If you see `Connection refused [Errno 111]`, PostgreSQL is not accessible. Verify:
+* Compose services are running: `docker compose ps`
 * Docker container is running: `docker ps | grep commerce-postgres`
 * Connection string in `.env` is correct
 * Firewall/network allows connection to database port (5432)
