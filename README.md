@@ -17,7 +17,7 @@
    * [4.5. The name of the category constraints](#45-the-name-of-the-category-constraints)
    * [4.6. The parent field of the category](#46-the-parent-field-of-the-category)
    * [4.7. Pagination of the returned results](#47-pagination-of-the-returned-results)
-   * [4.8. Databse to store products, categories and images](#48-databse-to-store-products-categories-and-images)
+   * [4.8. Database to store products, categories and images](#48-database-to-store-products-categories-and-images)
    * [4.9. Unit test for real database or for mock database](#49-unit-test-for-real-database-or-for-mock-database)
 * [5. High-Level Design](#5-high-level-design)
    * [5.1. Architecture Notes](#51-architecture-notes)
@@ -32,6 +32,9 @@
    * [7.4. Search Endpoint](#74-search-endpoint)
    * [7.5. Request and Response Schemas](#75-request-and-response-schemas)
 * [8. Run and Test](#8-run-and-test)
+   * [8.1. Setup](#81-setup)
+   * [8.2. Development Server](#82-development-server)
+   * [8.3. Testing](#83-testing)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -161,7 +164,7 @@ The **FastAPI** was chosen:
    * [Stripe API pagination](https://stripe.com/docs/api/pagination)
    * [Shopify REST API pagination](https://shopify.dev/docs/api/usage/pagination-rest)
 
-### 4.8. Databse to store products, categories and images
+### 4.8. Database to store products, categories and images
 * PostgreSQL with `asyncpg` (via SQLAlchemy 2.0 async) gives the best combination of correctness (exact decimals, recursive CTEs, cascading deletes) and performance (async I/O, rich indexing).
 * Supports: Recursive CTEs , `DECIMAL` precision, full UTF-8, concurrent writes, async driver for FastAPI and index types
 * SQLite has limited decimal precision, no support of concurrent writes and no index types
@@ -465,7 +468,7 @@ Validation error response:
 
 ## 8. Run and Test
 
-### Setup
+### 8.1. Setup
 
 1. Create and activate a virtual environment:
 
@@ -486,7 +489,7 @@ pip install -e '.[dev]'
 cp .env.example .env
 ```
 
-### Development Server
+### 8.2. Development Server
 
 Before starting the server, ensure PostgreSQL is running. Choose one approach:
 
@@ -528,7 +531,7 @@ If you see `Connection refused [Errno 111]`, PostgreSQL is not accessible. Verif
 * Connection string in `.env` is correct
 * Firewall/network allows connection to database port (5432)
 
-### Testing
+### 8.3. Testing
 
 The test suite includes **33 integration tests** covering:
 
