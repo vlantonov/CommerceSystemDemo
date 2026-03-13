@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.observability.metrics import search_requests_total, search_result_count, search_zero_results_total
+from app.observability.route import ObservabilityRoute
 from app.schemas.product import ProductRead, ProductSearchResponse
 from app.services.product_service import search_products
 
-router = APIRouter()
+router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.search")
 
 

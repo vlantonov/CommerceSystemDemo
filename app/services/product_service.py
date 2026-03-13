@@ -2,6 +2,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from time import perf_counter
 
+from app.db.session import get_session_factory
 from app.models.product import Product
 from app.services.category_service import category_subtree_cte
 
@@ -37,12 +38,22 @@ async def search_products(
         query = query.where(Product.category_id.in_(select(category_tree.c.id)))
     timing_context["query_build_ms"] = (perf_counter() - query_build_start) * 1000
 
-    total_query = select(func.count()).select_from(query.subquery())
-    count_query_start = perf_counter()
-    total = (await session.execute(total_query)).scalar_one()
-    timing_context["count_query_ms"] = (perf_counter() - count_query_start) * 1000
-
+    # Fetch data first using LIMIT — this is always fast.
     data_query_start = perf_counter()
     records = (await session.execute(query.limit(limit).offset(offset))).scalars().all()
     timing_context["data_query_ms"] = (perf_counter() - data_query_start) * 1000
+
+    # Skip COUNT(*) when the total is inferrable from the result set.
+    # If we're on the first page and fewer rows than the page limit were returned,
+    # all matching rows fit on this page so total == offset + len(records).
+    if offset == 0 and len(records) < limit:
+        total = len(records)
+        timing_context["count_query_ms"] = 0.0
+    else:
+        total_query = select(func.count()).select_from(query.subquery())
+        count_query_start = perf_counter()
+        async with get_session_factory()() as count_session:
+            total = (await count_session.execute(total_query)).scalar_one()
+        timing_context["count_query_ms"] = (perf_counter() - count_query_start) * 1000
+
     return records, total
