@@ -2,6 +2,7 @@ from decimal import Decimal
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
@@ -15,6 +16,7 @@ logger = logging.getLogger("app.search")
 
 @router.get("/search", response_model=ProductSearchResponse)
 async def search_products_endpoint(
+    request: Request,
     q: str | None = Query(default=None, min_length=1, max_length=255),
     min_price: Decimal | None = Query(default=None, ge=Decimal("0")),
     max_price: Decimal | None = Query(default=None, ge=Decimal("0")),
@@ -37,6 +39,7 @@ async def search_products_endpoint(
         )
         raise HTTPException(status_code=422, detail="min_price cannot be greater than max_price")
 
+    search_timing: dict[str, float] = {}
     products, total = await search_products(
         session,
         q=q,
@@ -45,7 +48,23 @@ async def search_products_endpoint(
         category_id=category_id,
         limit=limit,
         offset=offset,
+        timing_context=search_timing,
     )
+
+    filters_applied: list[str] = []
+    if q is not None and q.strip() != "":
+        filters_applied.append("q")
+    if min_price is not None:
+        filters_applied.append("min_price")
+    if max_price is not None:
+        filters_applied.append("max_price")
+    if category_id is not None:
+        filters_applied.append("category_id")
+
+    request_state = getattr(request.state, "request_observability_state", None)
+    if request_state is not None:
+        request_state.search_phase_ms = search_timing.copy()
+        request_state.search_filters_applied = filters_applied
 
     search_result_count.record(total, search_attributes)
     if total == 0:
@@ -60,6 +79,10 @@ async def search_products_endpoint(
             "category_id": category_id,
             "limit": limit,
             "offset": offset,
+            "filters_applied": filters_applied,
+            "search_phase_ms": {
+                key: round(value, 3) for key, value in search_timing.items()
+            },
             "result_count": len(products),
             "total": total,
         },

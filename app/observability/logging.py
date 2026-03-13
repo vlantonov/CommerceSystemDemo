@@ -8,12 +8,16 @@ from datetime import UTC, datetime
 from opentelemetry import trace
 
 from app.core.config import Settings
+from app.observability.context import get_current_request_state
 
 _LOGGING_CONFIGURED = False
 
 
 class _OpenTelemetryContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
+        request_state = get_current_request_state()
+        record.request_id = request_state.request_id if request_state is not None else ""
+
         span = trace.get_current_span()
         span_context = span.get_span_context()
 
@@ -34,6 +38,7 @@ class _JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            "request_id": getattr(record, "request_id", ""),
             "trace_id": getattr(record, "trace_id", ""),
             "span_id": getattr(record, "span_id", ""),
         }
@@ -69,6 +74,7 @@ class _JsonFormatter(logging.Formatter):
                 "asctime",
                 "trace_id",
                 "span_id",
+                "request_id",
             }:
                 continue
 

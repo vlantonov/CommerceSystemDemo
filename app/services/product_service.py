@@ -1,5 +1,6 @@
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from time import perf_counter
 
 from app.models.product import Product
 from app.services.category_service import category_subtree_cte
@@ -14,7 +15,11 @@ async def search_products(
     category_id: int | None,
     limit: int,
     offset: int,
+    timing_context: dict[str, float] | None = None,
 ):
+    timing_context = timing_context if timing_context is not None else {}
+
+    query_build_start = perf_counter()
     query = select(Product)
 
     if q:
@@ -30,9 +35,14 @@ async def search_products(
     if category_id is not None:
         category_tree = category_subtree_cte(category_id)
         query = query.where(Product.category_id.in_(select(category_tree.c.id)))
+    timing_context["query_build_ms"] = (perf_counter() - query_build_start) * 1000
 
     total_query = select(func.count()).select_from(query.subquery())
+    count_query_start = perf_counter()
     total = (await session.execute(total_query)).scalar_one()
+    timing_context["count_query_ms"] = (perf_counter() - count_query_start) * 1000
 
+    data_query_start = perf_counter()
     records = (await session.execute(query.limit(limit).offset(offset))).scalars().all()
+    timing_context["data_query_ms"] = (perf_counter() - data_query_start) * 1000
     return records, total
