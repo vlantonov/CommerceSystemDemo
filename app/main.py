@@ -6,7 +6,9 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import TemplateNotFound
 
 from app.api import api_router
 from app.core.config import get_settings
@@ -20,9 +22,34 @@ from app.observability import (
 )
 
 logger = logging.getLogger("app.lifecycle")
-templates = Jinja2Templates(
-    directory=str(Path(__file__).resolve().parent.parent / "templates")
-)
+
+
+def _resolve_template_directories() -> list[str]:
+    """Return existing template directories for source and packaged layouts."""
+    app_dir = Path(__file__).resolve().parent
+    candidates = [
+        app_dir.parent / "templates",  # repository layout: <root>/templates
+        app_dir / "templates",  # packaged layout:
+        # <site-packages>/app/templates
+        Path.cwd() / "templates",  # runtime cwd layout (common in PaaS)
+    ]
+
+    directories: list[str] = []
+    for candidate in candidates:
+        if candidate.is_dir():
+            resolved = str(candidate.resolve())
+            if resolved not in directories:
+                directories.append(resolved)
+
+    if directories:
+        return directories
+
+    # Last-resort default keeps startup deterministic; missing template is
+    # handled gracefully in the route fallback below.
+    return [str((app_dir.parent / "templates").resolve())]
+
+
+templates = Jinja2Templates(directory=_resolve_template_directories())
 
 
 @asynccontextmanager
@@ -59,11 +86,33 @@ def create_app() -> FastAPI:
 
     @app.get("/", tags=["home"])
     async def home(request: Request):
-        return templates.TemplateResponse(
-            request=request,
-            name="index.html",
-            context={"project_name": "Commerce System Demo"},
-        )
+        try:
+            return templates.TemplateResponse(
+                request=request,
+                name="index.html",
+                context={"project_name": "Commerce System Demo"},
+            )
+        except TemplateNotFound:
+            logger.exception("home_template_missing")
+            return HTMLResponse(
+                content=(
+                    "<!doctype html><html><head>"
+                    "<title>Commerce System Demo</title>"
+                    "<meta charset='utf-8'>"
+                    "<meta name='viewport' "
+                    "content='width=device-width, initial-scale=1'>"
+                    "</head><body>"
+                    "<h1>Commerce System Demo</h1>"
+                    "<p>"
+                    "Template not available in this deployment. Use API docs:"
+                    "</p>"
+                    "<ul><li><a href='/docs'>/docs</a></li>"
+                    "<li><a href='/redoc'>/redoc</a></li>"
+                    "<li><a href='/health'>/health</a></li></ul>"
+                    "</body></html>"
+                ),
+                status_code=200,
+            )
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:
