@@ -42,6 +42,11 @@
    * [9.4. Grafana dashboards](#94-grafana-dashboards)
    * [9.5. Alerting rules (P1)](#95-alerting-rules-p1)
    * [9.6. How to exercise the dashboards](#96-how-to-exercise-the-dashboards)
+* [10. Implemented Improvements](#10-implemented-improvements)
+   * [10.1. Application and Runtime](#101-application-and-runtime)
+   * [10.2. Database and Query Path](#102-database-and-query-path)
+   * [10.3. Logging and Metrics Path](#103-logging-and-metrics-path)
+   * [10.4. Validation and Benchmarks](#104-validation-and-benchmarks)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -777,3 +782,53 @@ Notes:
 * After instrumentation changes, rebuild the application container so the running service exposes the new metrics.
 * Some counters appear only after the first matching event is observed. Until then, Prometheus and Grafana can show no data for that series.
 * The load test intentionally produces successful traffic and controlled 4xx scenarios so the P1, P2, and P3 dashboards all receive data.
+
+## 10. Implemented Improvements
+
+This section summarizes the concrete improvements implemented to reduce latency and improve observability for concurrent traffic.
+
+### 10.1. Application and Runtime
+
+* Enabled multi-worker app execution in [Dockerfile](Dockerfile) using `WEB_CONCURRENCY=2` so requests are not serialized through a single worker.
+* Applied `route_class=ObservabilityRoute` consistently to API routers in `app/api` so queue-wait and handler timing is captured for all endpoints.
+* Added request lifecycle diagnostics in [app/observability/middleware.py](app/observability/middleware.py):
+   * `duration_ms`, `queue_wait_ms`, `handler_ms`
+   * `in_flight_requests`, `response_size_bytes`, and request context fields
+* Added structured request slow-path logging (`request_slow`) for rapid triage when requests exceed the target threshold.
+
+### 10.2. Database and Query Path
+
+* Wired SQLAlchemy async pool settings in [app/db/session.py](app/db/session.py) and exposed tuning in [app/core/config.py](app/core/config.py):
+   * `database_pool_size = 20`
+   * `database_max_overflow = 5`
+   * `database_pool_timeout = 5`
+   * `database_pool_pre_ping = False`
+* Refactored search execution in [app/services/product_service.py](app/services/product_service.py) to release the data-query connection before optional `COUNT(*)` execution.
+* Added `COUNT(*)` skip optimization on first-page short results (`offset == 0 and len(records) < limit`) to avoid unnecessary aggregate scans.
+* Added migration helper [scripts/migrate_indexes.py](scripts/migrate_indexes.py) to backfill performance indexes for existing databases, including `pg_trgm` + GIN trigram index for `ILIKE` search on `product.title`.
+* Added DB observability in [app/observability/db.py](app/observability/db.py): query duration metrics, slow-query logs, and pool in-use tracking.
+
+### 10.3. Logging and Metrics Path
+
+* Migrated logging to asynchronous queue-based handling in [app/observability/logging.py](app/observability/logging.py):
+   * `QueueHandler` on request path
+   * `QueueListener` background thread for I/O
+   * startup/shutdown wiring in [app/main.py](app/main.py)
+* Moved HTTP metric recording off the event-loop critical path in [app/observability/middleware.py](app/observability/middleware.py) by dispatching histogram/counter updates to the thread pool via `run_in_executor`.
+* Preserved synchronous in-flight counter updates to keep active-request gauges accurate while offloading heavier metric updates.
+
+### 10.4. Validation and Benchmarks
+
+* Migration status: [scripts/migrate_indexes.py](scripts/migrate_indexes.py) executed successfully against local `commerce_demo` (all index statements applied).
+* Test suite status after migration: `33 passed` (`python -m pytest tests/ -q`).
+* Local mixed-load validation with [scripts/load_test.py](scripts/load_test.py):
+   * `workers=8`, `duration=30s`: ~103 RPS, no functional errors.
+   * `workers=16`, `duration=60s`: ~69 RPS sustained, all requests completed successfully.
+* Direct client-side latency sample after DB migration (`1000` requests, concurrency `16`) showed:
+   * average ~102 ms
+   * p50 ~89 ms
+   * p95 ~196 ms
+   * p99 ~373 ms
+   * max ~387 ms
+
+These results indicate the service remains stable under heavier concurrent local traffic, with p95 staying near the 200 ms target and tail-latency behavior visible under stress for continued tuning.
