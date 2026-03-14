@@ -105,6 +105,20 @@
           "legendFormat": "{{reason}}"
         }
       ]
+    },
+    {
+      "id": 8,
+      "type": "heatmap",
+      "title": "Histogram - Search Result Count Buckets",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_search_result_count_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}"
+        }
+      ]
     }
   ]
 }

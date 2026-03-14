@@ -138,6 +138,62 @@
           "queryType": "range"
         }
       ]
+    },
+    {
+      "id": 9,
+      "type": "heatmap",
+      "title": "Histogram - Response Time Buckets (s)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_http_response_time_seconds_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "heatmap",
+      "title": "Histogram - Processing Time Buckets (s)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_http_processing_duration_seconds_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "heatmap",
+      "title": "Histogram - Queue Wait Time Buckets (s)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_http_queue_wait_duration_seconds_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "heatmap",
+      "title": "Histogram - Response Payload Size Buckets (bytes)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_http_response_payload_size_bytes_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}"
+        }
+      ]
     }
   ]
 }
