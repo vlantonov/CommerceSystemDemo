@@ -522,6 +522,62 @@ Note:
 * Compose now includes a one-shot `migrate-indexes` service that runs `scripts/migrate_indexes.py` after PostgreSQL becomes healthy.
 * The `app` service waits for this migration to complete successfully before starting.
 
+#### Option B: Run observability locally against a remote app and database
+
+Use the remote compose file when the API service and PostgreSQL already run on another host and you only want the local monitoring stack.
+
+1. Create a dedicated env file for the remote target:
+
+```bash
+cp .env.remote.example .env.remote
+```
+
+2. Set the remote host and, if needed, the exposed app port:
+
+```bash
+REMOTE_SERVER_ADDRESS=api.example.com
+REMOTE_APP_SCHEME=https
+REMOTE_APP_PORT=8000
+REMOTE_METRICS_PATH=/metrics
+```
+
+3. Start the remote-targeted observability stack:
+
+```bash
+docker compose -f docker-compose.remote.yml --env-file .env.remote up -d
+```
+
+This stack does not start the `app`, `migrate-indexes`, or `db` services locally. Prometheus scrapes `REMOTE_APP_SCHEME://REMOTE_SERVER_ADDRESS:REMOTE_APP_PORTREMOTE_METRICS_PATH`, while Grafana, Tempo, Loki, and the OpenTelemetry Collector continue to run locally.
+
+Remote limitations:
+* Metrics work immediately as long as the remote app exposes `/metrics` publicly or over a reachable private network.
+* Traces appear only if the remote app is configured to send OTLP traffic to a collector endpoint reachable from that remote host.
+* Logs require a separate `promtail` agent on the remote Docker host because the local stack can only scrape local container log files.
+
+Optional server-side log shipping:
+
+1. On the remote Docker host, create a log shipper env file:
+
+```bash
+cp .env.server-logs.example .env.server-logs
+```
+
+2. Point it to a Loki endpoint reachable from that server:
+
+```bash
+REMOTE_LOKI_PUSH_URL=https://logs.example.com/loki/api/v1/push
+REMOTE_LOG_HOST=commerce-prod-01
+REMOTE_LOG_JOB=commerce-remote
+```
+
+3. Start the remote log shipper on that server:
+
+```bash
+docker compose -f docker-compose.server-logs.yml --env-file .env.server-logs up -d
+```
+
+This ships Docker JSON logs from the remote host into Loki. If Loki runs on your workstation, expose it through a tunnel or reverse proxy first because the remote server must be able to reach `REMOTE_LOKI_PUSH_URL` directly.
+
 Stop services:
 
 ```bash
@@ -534,7 +590,7 @@ Stop services and remove the PostgreSQL volume:
 docker compose down -v
 ```
 
-#### Option B: Run app locally against PostgreSQL
+#### Option C: Run app locally against PostgreSQL
 
 Before starting the server, ensure PostgreSQL is running. You can use Docker for the database only:
 
@@ -751,6 +807,10 @@ Useful endpoints:
 * Tempo API: `http://127.0.0.1:3200`
 * Loki API: `http://127.0.0.1:3100`
 
+For a remote-hosted API and database, use `docker-compose.remote.yml` instead. It keeps Grafana, Prometheus, Tempo, Loki, and the collector local, but scrapes the application metrics endpoint from `REMOTE_SERVER_ADDRESS:REMOTE_APP_PORT` configured through `.env.remote`.
+
+To ingest logs from that remote host as well, run `docker-compose.server-logs.yml` on the remote Docker server with `REMOTE_LOKI_PUSH_URL` set to a Loki endpoint the server can reach.
+
 Relevant configuration files:
 * `app/observability/logging.py` configures structured JSON logging and trace/span correlation fields
 * `app/observability/setup.py` initializes tracing, metrics, middleware, and the `/metrics` endpoint
@@ -759,6 +819,7 @@ Relevant configuration files:
 * `observability/otel-collector-config.yaml` configures OTLP ingestion and exporter pipeline
 * `observability/loki-config.yaml` configures Loki storage and ingestion
 * `observability/promtail-config.yaml` configures container log scraping and shipping to Loki
+* `observability/promtail.remote.yml.tmpl` configures the remote-server Promtail agent for Loki shipping
 * `observability/prometheus.yml` configures scrape jobs and alert rule loading
 * `observability/grafana/provisioning` provisions Grafana datasources and dashboards
 

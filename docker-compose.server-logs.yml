@@ -1,0 +1,20 @@
+services:
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: commerce-promtail-remote-agent
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    environment:
+      REMOTE_LOKI_PUSH_URL: ${REMOTE_LOKI_PUSH_URL:?REMOTE_LOKI_PUSH_URL is required}
+      REMOTE_LOG_HOST: ${REMOTE_LOG_HOST:-commerce-remote}
+      REMOTE_LOG_JOB: ${REMOTE_LOG_JOB:-docker}
+    command:
+      - 'sed -e "s|__REMOTE_LOKI_PUSH_URL__|$${REMOTE_LOKI_PUSH_URL}|g" -e "s|__REMOTE_LOG_HOST__|$${REMOTE_LOG_HOST}|g" -e "s|__REMOTE_LOG_JOB__|$${REMOTE_LOG_JOB}|g" /etc/promtail/promtail.remote.yml.tmpl > /tmp/promtail.yml && /usr/bin/promtail --config.file=/tmp/promtail.yml'
+    volumes:
+      - ./observability/promtail.remote.yml.tmpl:/etc/promtail/promtail.remote.yml.tmpl:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail_remote_positions:/var/lib/promtail
+
+volumes:
+  promtail_remote_positions:
