@@ -554,6 +554,32 @@ DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
 LOG_LEVEL=INFO
 ```
 
+If the service is deployed on a remote host (for example Render), set these environment variables in the host's service settings (do not rely only on local `.env`):
+
+```bash
+DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
+DATABASE_POOL_PRE_PING=false
+DATABASE_POOL_SIZE=20
+DATABASE_MAX_OVERFLOW=5
+LOG_LEVEL=INFO
+```
+
+Notes:
+* `DATABASE_POOL_PRE_PING=false` avoids an extra connection-check round trip on each checkout.
+* `DATABASE_POOL_SIZE=20` and `DATABASE_MAX_OVERFLOW=5` are the tuned defaults used for concurrent load.
+* After changing remote environment variables, trigger a redeploy/restart so the running container picks up the new values.
+
+#### Render Checklist (Remote Runtime Verification)
+
+Use this checklist after every Render deploy to confirm that the running instance matches the expected config.
+
+1. In Render Dashboard -> `Environment`, confirm:
+   * `DATABASE_POOL_PRE_PING=false`
+   * `DATABASE_POOL_SIZE=20`
+   * `DATABASE_MAX_OVERFLOW=5`
+
+2. In Render Dashboard -> `Deploys`, confirm the active deploy is the expected commit.
+
 Start the server locally:
 
 ```bash
