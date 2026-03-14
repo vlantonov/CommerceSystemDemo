@@ -1,8 +1,10 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.templating import Jinja2Templates
 
 from app.api import api_router
 from app.core.config import get_settings
@@ -16,6 +18,9 @@ from app.observability import (
 )
 
 logger = logging.getLogger("app.lifecycle")
+templates = Jinja2Templates(
+    directory=str(Path(__file__).resolve().parent.parent / "templates")
+)
 
 
 @asynccontextmanager
@@ -47,6 +52,14 @@ def create_app() -> FastAPI:
     app.router.route_class = ObservabilityRoute
     initialize_app_observability(app, settings)
     app.include_router(api_router, prefix=settings.api_prefix)
+
+    @app.get("/", tags=["home"])
+    async def home(request: Request):
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={"project_name": "Commerce System Demo"},
+        )
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:

@@ -39,6 +39,16 @@ async def test_health_endpoint(client: AsyncClient):
     assert response.json() == {"status": "ok"}
 
 
+@pytest.mark.asyncio
+async def test_home_page_endpoint(client: AsyncClient):
+    """Test that the root endpoint serves an HTML project overview page."""
+    response = await client.get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Commerce System Demo" in response.text
+    assert "/api/v1/search/products" in response.text
+
+
 # ============================================================================
 # Category Endpoints Tests
 # ============================================================================
