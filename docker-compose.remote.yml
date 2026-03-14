@@ -1,0 +1,71 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    container_name: commerce-otel-collector-remote
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      - tempo
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8888:8888"
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: commerce-tempo-remote
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+    ports:
+      - "3200:3200"
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: commerce-loki-remote
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki_remote_data:/loki
+    ports:
+      - "3100:3100"
+
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    container_name: commerce-prometheus-remote
+    entrypoint: ["/bin/sh", "-c"]
+    environment:
+      REMOTE_SERVER_ADDRESS: ${REMOTE_SERVER_ADDRESS:?REMOTE_SERVER_ADDRESS is required}
+      REMOTE_APP_SCHEME: ${REMOTE_APP_SCHEME:-http}
+      REMOTE_APP_PORT: ${REMOTE_APP_PORT:-8000}
+      REMOTE_METRICS_PATH: ${REMOTE_METRICS_PATH:-/metrics}
+    command:
+      - 'sed -e "s|__REMOTE_SERVER_ADDRESS__|$${REMOTE_SERVER_ADDRESS}|g" -e "s|__REMOTE_APP_SCHEME__|$${REMOTE_APP_SCHEME}|g" -e "s|__REMOTE_APP_PORT__|$${REMOTE_APP_PORT}|g" -e "s|__REMOTE_METRICS_PATH__|$${REMOTE_METRICS_PATH}|g" /etc/prometheus/prometheus.remote.yml.tmpl > /tmp/prometheus.yml && /bin/prometheus --config.file=/tmp/prometheus.yml --storage.tsdb.path=/prometheus --web.console.libraries=/etc/prometheus/console_libraries --web.console.templates=/etc/prometheus/consoles'
+    volumes:
+      - ./observability/prometheus.remote.yml.tmpl:/etc/prometheus/prometheus.remote.yml.tmpl:ro
+      - ./observability/prometheus-alerts:/etc/prometheus/alerts:ro
+    depends_on:
+      - otel-collector
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: commerce-grafana-remote
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/grafana/provisioning/dashboards/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    ports:
+      - "3000:3000"
+
+volumes:
+  loki_remote_data:
