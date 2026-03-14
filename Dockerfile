@@ -47,10 +47,10 @@ COPY app/ ./app/
 COPY scripts/ ./scripts/
 COPY pyproject.toml README.md ./
 
-# Create an editable install so all sub-packages (app.api, app.core, …) are
-# importable. This only writes a .pth pointer — no recompilation occurs because
-# all compiled extensions were already installed in the builder stage.
-RUN pip install --no-cache-dir --no-build-isolation --no-deps -e . \
+# Install the package so all sub-packages (app.api, app.core, …) are importable.
+# Compiled extensions were already installed in the builder stage; --no-deps avoids
+# reinstalling them.
+RUN pip install --no-cache-dir --no-build-isolation --no-deps . \
  && chown -R appuser:appuser /app
 
 USER appuser

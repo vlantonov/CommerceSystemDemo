@@ -11,12 +11,6 @@ http_request_duration_seconds: Histogram = _meter.create_histogram(
     description="End-to-end HTTP request duration from ingress to response ready",
 )
 
-http_response_time_seconds: Histogram = _meter.create_histogram(
-    name="commerce_http_response_time_seconds",
-    unit="s",
-    description="Time spent generating HTTP responses",
-)
-
 http_processing_duration_seconds: Histogram = _meter.create_histogram(
     name="commerce_http_processing_duration_seconds",
     unit="s",

@@ -4,9 +4,9 @@ services:
     container_name: commerce-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: commerce_demo
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-commerce_demo}
     ports:
       - "5432:5432"
     volumes:
@@ -24,7 +24,7 @@ services:
     container_name: commerce-migrate-indexes
     restart: "no"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/commerce_demo
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-commerce_demo}
     command: ["python", "scripts/migrate_indexes.py"]
     depends_on:
       db:
@@ -37,7 +37,7 @@ services:
     container_name: commerce-app
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/commerce_demo
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-commerce_demo}
       API_PREFIX: /api/v1
       AUTO_CREATE_SCHEMA: "true"
       DEFAULT_LIMIT: "20"

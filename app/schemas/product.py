@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 
 SKU_REGEX = r"^[A-Z0-9_-]{1,100}$"
@@ -13,10 +13,14 @@ class ProductBase(BaseModel):
     """Schema for productbase."""
     title: str = Field(min_length=1, max_length=255)
     description: str = Field(min_length=1, max_length=10000)
-    image_url: str | None = Field(default=None, max_length=2083)
+    image_url: AnyHttpUrl | None = Field(default=None)
     sku: str = Field(min_length=1, max_length=100, pattern=SKU_REGEX)
     price: Decimal = Field(ge=Decimal("0"))
     category_id: int | None = None
+
+    @field_serializer("image_url")
+    def serialize_image_url(self, value: AnyHttpUrl | None) -> str | None:
+        return str(value) if value is not None else None
 
     @field_validator("sku", mode="before")
     @classmethod
@@ -35,7 +39,7 @@ class ProductUpdate(BaseModel):
     """Schema for productupdate."""
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, min_length=1, max_length=10000)
-    image_url: str | None = Field(default=None, max_length=2083)
+    image_url: AnyHttpUrl | None = Field(default=None)
     sku: str | None = Field(default=None, min_length=1, max_length=100, pattern=SKU_REGEX)
     price: Decimal | None = Field(default=None, ge=Decimal("0"))
     category_id: int | None = None

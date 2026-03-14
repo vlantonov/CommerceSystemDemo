@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from threading import Lock
 from time import perf_counter
 
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
@@ -15,7 +14,6 @@ from app.observability.metrics import db_pool_in_use_connections, db_query_durat
 
 _DB_TIME_KEY = "_commerce_db_query_start"
 _INSTRUMENTED_ENGINES: set[int] = set()
-_POOL_IN_USE_LOCK = Lock()
 _POOL_IN_USE_CONNECTIONS = 0
 _SLOW_QUERY_THRESHOLD_MS = 100.0
 
@@ -49,17 +47,15 @@ def _extract_table(statement: str, operation: str) -> str:
 
 
 def _add_pool_in_use(delta: int) -> int:
-    """Atomically adjust the in-process count of checked-out DB connections."""
+    """Adjust the in-process count of checked-out DB connections (safe: pool events fire on the event loop)."""
     global _POOL_IN_USE_CONNECTIONS
-    with _POOL_IN_USE_LOCK:
-        _POOL_IN_USE_CONNECTIONS += delta
-        return _POOL_IN_USE_CONNECTIONS
+    _POOL_IN_USE_CONNECTIONS += delta
+    return _POOL_IN_USE_CONNECTIONS
 
 
 def get_pool_in_use_connections() -> int:
     """Return the current in-process count of checked-out DB connections."""
-    with _POOL_IN_USE_LOCK:
-        return _POOL_IN_USE_CONNECTIONS
+    return _POOL_IN_USE_CONNECTIONS
 
 
 def instrument_engine(engine: Engine) -> None:

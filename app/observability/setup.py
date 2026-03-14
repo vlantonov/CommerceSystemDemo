@@ -58,10 +58,6 @@ def _build_metric_views() -> list[View]:
             aggregation=explicit_duration_aggregation,
         ),
         View(
-            instrument_name="commerce_http_response_time_seconds",
-            aggregation=explicit_duration_aggregation,
-        ),
-        View(
             instrument_name="commerce_http_processing_duration_seconds",
             aggregation=explicit_duration_aggregation,
         ),
