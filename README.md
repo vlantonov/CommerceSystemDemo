@@ -580,6 +580,31 @@ Use this checklist after every Render deploy to confirm that the running instanc
 
 2. In Render Dashboard -> `Deploys`, confirm the active deploy is the expected commit.
 
+#### Render Postgres Notes (Latency Tuning)
+
+If you still observe a persistent `~100ms` DB latency tier or occasional near-`200ms` mutation paths on Render, apply these checks in order:
+
+1. Region and network:
+   * Keep the web service and Render Postgres in the same region.
+   * Use the private/internal database hostname when available.
+
+2. Database plan sizing:
+   * Upgrade Render Postgres plan (CPU and I/O headroom) if DB metrics show pressure.
+   * Re-run the same load scenario after each plan change for apples-to-apples comparison.
+
+3. Connection settings (service env vars):
+   * `DATABASE_POOL_PRE_PING=false`
+   * `DATABASE_POOL_SIZE=20`
+   * `DATABASE_MAX_OVERFLOW=5`
+
+4. Maintenance:
+   * Run `VACUUM (ANALYZE)` on frequently updated tables.
+   * Keep indexes from `scripts/migrate_indexes.py` applied in production.
+
+Important limitation:
+* Render managed Postgres does not expose all low-level server tuning knobs typical in self-managed Postgres.
+* The `db_time` undercount mismatch seen in some search requests is typically instrumentation-path timing (outside query execute hooks), not a direct Postgres parameter issue.
+
 Start the server locally:
 
 ```bash
