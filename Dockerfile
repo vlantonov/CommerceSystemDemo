@@ -44,6 +44,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application source and packaging metadata
 COPY app/ ./app/
+COPY scripts/ ./scripts/
 COPY pyproject.toml README.md ./
 
 # Create an editable install so all sub-packages (app.api, app.core, …) are
