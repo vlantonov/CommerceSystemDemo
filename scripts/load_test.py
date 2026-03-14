@@ -35,11 +35,13 @@ API_PREFIX = "/api/v1"
 
 
 def _rand_sku() -> str:
+    """Generate a randomized, valid SKU for synthetic product payloads."""
     suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
     return f"LOAD-{suffix}"
 
 
 def _rand_price() -> str:
+    """Generate a random decimal price encoded as a string."""
     return str(round(random.uniform(5.00, 2500.00), 2))
 
 
@@ -48,6 +50,7 @@ def _rand_price() -> str:
 # ---------------------------------------------------------------------------
 
 async def seed_catalog(client: httpx.AsyncClient) -> None:
+    """Create baseline categories and products before load generation starts."""
     print("Seeding catalog …", flush=True)
 
     root_names = ["Electronics", "Books", "Clothing", "Sports", "Home & Garden"]
@@ -94,6 +97,7 @@ async def seed_catalog(client: httpx.AsyncClient) -> None:
 
 
 async def _fetch_catalog_ids(client: httpx.AsyncClient) -> dict[str, list[int]]:
+    """Fetch current category and product ids used by traffic generators."""
     cat_ids: list[int] = []
     prod_ids: list[int] = []
 
@@ -113,6 +117,7 @@ async def _fetch_catalog_ids(client: httpx.AsyncClient) -> dict[str, list[int]]:
 # ---------------------------------------------------------------------------
 
 async def _search(client: httpx.AsyncClient, catalog: dict) -> None:
+    """Issue mixed search requests that exercise search filters and edge cases."""
     cat_ids = catalog["category_ids"]
     choice = random.random()
     if choice < 0.20:
@@ -154,6 +159,7 @@ async def _search(client: httpx.AsyncClient, catalog: dict) -> None:
 
 
 async def _product_reads(client: httpx.AsyncClient, catalog: dict) -> None:
+    """Generate read traffic for product detail and listing endpoints."""
     prod_ids = catalog["product_ids"]
     r = random.random()
     if r < 0.60 and prod_ids:
@@ -170,6 +176,7 @@ async def _product_reads(client: httpx.AsyncClient, catalog: dict) -> None:
 
 
 async def _category_reads(client: httpx.AsyncClient, catalog: dict) -> None:
+    """Generate read traffic for category detail and listing endpoints."""
     cat_ids = catalog["category_ids"]
     r = random.random()
     if r < 0.65 and cat_ids:
@@ -182,6 +189,7 @@ async def _category_reads(client: httpx.AsyncClient, catalog: dict) -> None:
 
 
 async def _product_mutations(client: httpx.AsyncClient, catalog: dict) -> None:
+    """Generate product create/update/delete mutations under load."""
     prod_ids = catalog["product_ids"]
     cat_ids = catalog["category_ids"]
     r = random.random()
@@ -211,6 +219,7 @@ async def _product_mutations(client: httpx.AsyncClient, catalog: dict) -> None:
 
 
 async def _category_mutations(client: httpx.AsyncClient, catalog: dict) -> None:
+    """Generate category create/update/delete mutations under load."""
     cat_ids = catalog["category_ids"]
     r = random.random()
 
@@ -335,6 +344,7 @@ async def _worker(
     stop_event: asyncio.Event,
     counters: dict,
 ) -> None:
+    """Run one worker loop that continuously executes weighted API actions."""
     while not stop_event.is_set():
         fn = random.choice(_MIX)
         try:
@@ -356,6 +366,7 @@ async def _reporter(
     duration: int,
     start: float,
 ) -> None:
+    """Print periodic progress, throughput, and expected-error counters."""
     while not stop_event.is_set():
         await asyncio.sleep(10)
         elapsed = time.monotonic() - start
@@ -374,6 +385,7 @@ async def _reporter(
 # ---------------------------------------------------------------------------
 
 async def main() -> None:
+    """Parse CLI args, run the load test, and print the final summary."""
     parser = argparse.ArgumentParser(
         description="Load generator / dashboard smoke-test for Commerce System Demo"
     )

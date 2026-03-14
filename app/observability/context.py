@@ -1,3 +1,5 @@
+"""Request-scoped observability context management utilities."""
+
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
@@ -6,6 +8,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class RequestObservabilityState:
+    """Per-request accumulator for timing, query, and search telemetry."""
     request_id: str
     route_path: str = ""
     queue_wait_ms: float = 0.0
@@ -27,12 +30,15 @@ _CURRENT_REQUEST_STATE: ContextVar[RequestObservabilityState | None] = ContextVa
 
 
 def set_current_request_state(state: RequestObservabilityState) -> Token[RequestObservabilityState | None]:
+    """Bind request observability state to the current context."""
     return _CURRENT_REQUEST_STATE.set(state)
 
 
 def reset_current_request_state(token: Token[RequestObservabilityState | None]) -> None:
+    """Restore the previous context-bound observability state."""
     _CURRENT_REQUEST_STATE.reset(token)
 
 
 def get_current_request_state() -> RequestObservabilityState | None:
+    """Return the current request observability state, if available."""
     return _CURRENT_REQUEST_STATE.get()

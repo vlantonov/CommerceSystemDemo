@@ -1,3 +1,5 @@
+"""Product API endpoints for CRUD operations."""
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -18,11 +20,13 @@ logger = logging.getLogger("app.products")
 
 
 class ProductListResponse(PaginatedResponse):
+    """Response model for productlist endpoints."""
     items: list[ProductRead]
 
 
 @router.post("", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
 async def create_product(payload: ProductCreate, session: AsyncSession = Depends(get_session)) -> ProductRead:
+    """Create product."""
     product = Product(**payload.model_dump())
     session.add(product)
     try:
@@ -43,6 +47,7 @@ async def create_product(payload: ProductCreate, session: AsyncSession = Depends
 
 @router.get("/{product_id}", response_model=ProductRead)
 async def get_product(product_id: int, session: AsyncSession = Depends(get_session)) -> ProductRead:
+    """Get product."""
     product = await timed_get(session, Product, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -55,6 +60,7 @@ async def list_products(
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> ProductListResponse:
+    """List products."""
     records = await timed_execute_scalars_all(session, select(Product).limit(limit).offset(offset))
     if offset == 0 and len(records) < limit:
         total = len(records)
@@ -67,6 +73,7 @@ async def list_products(
 async def update_product(
     product_id: int, payload: ProductUpdate, session: AsyncSession = Depends(get_session)
 ) -> ProductRead:
+    """Update product."""
     product = await timed_get(session, Product, product_id)
     if product is None:
         product_mutations_total.add(1, {"operation": "update", "result": "not_found"})
@@ -96,6 +103,7 @@ async def update_product(
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(product_id: int, session: AsyncSession = Depends(get_session)) -> None:
+    """Delete product."""
     product = await timed_get(session, Product, product_id)
     if product is None:
         product_mutations_total.add(1, {"operation": "delete", "result": "not_found"})

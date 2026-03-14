@@ -1,3 +1,5 @@
+"""Helpers for measuring database call timings."""
+
 from __future__ import annotations
 
 from time import perf_counter
@@ -20,12 +22,14 @@ async def _record_connection_acquire(session: AsyncSession) -> None:
 
 
 def _record_execute_fetch(duration_ms: float) -> None:
+    """Accumulate execute-plus-fetch duration for the active request."""
     request_state = get_current_request_state()
     if request_state is not None:
         request_state.db_execute_fetch_ms += duration_ms
 
 
 async def timed_get(session: AsyncSession, model: Any, ident: Any):
+    """Run `session.get` while recording acquire and execution timings."""
     await _record_connection_acquire(session)
     execute_fetch_start = perf_counter()
     result = await session.get(model, ident)
@@ -34,6 +38,7 @@ async def timed_get(session: AsyncSession, model: Any, ident: Any):
 
 
 async def timed_execute_scalars_all(session: AsyncSession, statement: Any):
+    """Execute a query and return all scalar rows with timing telemetry."""
     await _record_connection_acquire(session)
     execute_fetch_start = perf_counter()
     result = (await session.execute(statement)).scalars().all()
@@ -42,6 +47,7 @@ async def timed_execute_scalars_all(session: AsyncSession, statement: Any):
 
 
 async def timed_execute_scalar_one(session: AsyncSession, statement: Any):
+    """Execute a query and return one scalar result with timing telemetry."""
     await _record_connection_acquire(session)
     execute_fetch_start = perf_counter()
     result = (await session.execute(statement)).scalar_one()

@@ -1,3 +1,5 @@
+"""Category business logic helpers and hierarchy utilities."""
+
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,10 +10,12 @@ MAX_CATEGORY_DEPTH = 100
 
 
 async def get_category_or_none(session: AsyncSession, category_id: int) -> Category | None:
+    """Return a category by id, or `None` if it does not exist."""
     return await timed_get(session, Category, category_id)
 
 
 async def category_depth(session: AsyncSession, parent_id: int | None) -> int:
+    """Compute ancestor depth for a parent candidate in the category tree."""
     depth = 0
     current_parent_id = parent_id
     while current_parent_id is not None:
@@ -26,6 +30,7 @@ async def category_depth(session: AsyncSession, parent_id: int | None) -> int:
 
 
 async def validate_no_cycles(session: AsyncSession, category_id: int, new_parent_id: int | None) -> None:
+    """Ensure re-parenting a category does not create a cycle."""
     cursor = new_parent_id
     while cursor is not None:
         if cursor == category_id:
@@ -37,6 +42,7 @@ async def validate_no_cycles(session: AsyncSession, category_id: int, new_parent
 
 
 def category_subtree_cte(root_category_id: int):
+    """Build a recursive CTE for a category and all of its descendants."""
     category_tree: Select = select(Category.id).where(Category.id == root_category_id).cte(
         name="category_tree", recursive=True
     )

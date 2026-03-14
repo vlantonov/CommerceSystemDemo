@@ -1,3 +1,5 @@
+"""Search API endpoints for catalog queries."""
+
 from decimal import Decimal
 import logging
 
@@ -22,6 +24,7 @@ async def search_products_endpoint(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> ProductSearchResponse:
+    """Search products by text, price range, and category subtree filters."""
     search_attributes = {
         "has_q": str(q is not None and q.strip() != "").lower(),
         "has_category": str(category_id is not None).lower(),

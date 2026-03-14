@@ -1,3 +1,5 @@
+"""Structured logging setup and logging pipeline helpers."""
+
 from __future__ import annotations
 
 import json
@@ -18,6 +20,7 @@ _queue_listener: QueueListener | None = None
 
 
 class _OpenTelemetryContextFilter(logging.Filter):
+    """Inject trace/span/request correlation ids into log records."""
     def filter(self, record: logging.LogRecord) -> bool:
         request_state = get_current_request_state()
         record.request_id = request_state.request_id if request_state is not None else ""
@@ -36,6 +39,7 @@ class _OpenTelemetryContextFilter(logging.Filter):
 
 
 class _JsonFormatter(logging.Formatter):
+    """Serialize log records as structured JSON payloads."""
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, object] = {
             "timestamp": datetime.now(UTC).isoformat(),
@@ -91,6 +95,7 @@ class _JsonFormatter(logging.Formatter):
 
 
 def initialize_logging(settings: Settings) -> None:
+    """Configure process-wide structured logging with non-blocking queueing."""
     global _LOGGING_CONFIGURED, _queue_listener
     if _LOGGING_CONFIGURED:
         return

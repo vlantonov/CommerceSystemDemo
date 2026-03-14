@@ -1,3 +1,5 @@
+"""Pydantic schemas for product payloads and search responses."""
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -8,6 +10,7 @@ SKU_REGEX = r"^[A-Z0-9_-]{1,100}$"
 
 
 class ProductBase(BaseModel):
+    """Schema for productbase."""
     title: str = Field(min_length=1, max_length=255)
     description: str = Field(min_length=1, max_length=10000)
     image_url: str | None = Field(default=None, max_length=2083)
@@ -24,10 +27,12 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
+    """Schema for productcreate."""
     pass
 
 
 class ProductUpdate(BaseModel):
+    """Schema for productupdate."""
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, min_length=1, max_length=10000)
     image_url: str | None = Field(default=None, max_length=2083)
@@ -44,6 +49,7 @@ class ProductUpdate(BaseModel):
 
 
 class ProductRead(ProductBase):
+    """Schema for productread."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -52,6 +58,7 @@ class ProductRead(ProductBase):
 
 
 class ProductSearchResponse(BaseModel):
+    """Schema for productsearchresponse."""
     items: list[ProductRead]
     total: int
     limit: int

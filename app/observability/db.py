@@ -1,3 +1,5 @@
+"""Database instrumentation callbacks for metrics and tracing."""
+
 from __future__ import annotations
 
 import logging
@@ -21,6 +23,7 @@ logger = logging.getLogger("app.db")
 
 
 def _extract_operation(statement: str) -> str:
+    """Extract the SQL verb used for metric labeling."""
     tokenized = statement.strip().split(maxsplit=1)
     if not tokenized:
         return "UNKNOWN"
@@ -28,6 +31,7 @@ def _extract_operation(statement: str) -> str:
 
 
 def _extract_table(statement: str, operation: str) -> str:
+    """Extract a best-effort table name for common SQL operations."""
     patterns: dict[str, str] = {
         "SELECT": r"\\bFROM\\s+([\\w.\"]+)",
         "DELETE": r"\\bFROM\\s+([\\w.\"]+)",
@@ -45,6 +49,7 @@ def _extract_table(statement: str, operation: str) -> str:
 
 
 def _add_pool_in_use(delta: int) -> int:
+    """Atomically adjust the in-process count of checked-out DB connections."""
     global _POOL_IN_USE_CONNECTIONS
     with _POOL_IN_USE_LOCK:
         _POOL_IN_USE_CONNECTIONS += delta
@@ -52,11 +57,13 @@ def _add_pool_in_use(delta: int) -> int:
 
 
 def get_pool_in_use_connections() -> int:
+    """Return the current in-process count of checked-out DB connections."""
     with _POOL_IN_USE_LOCK:
         return _POOL_IN_USE_CONNECTIONS
 
 
 def instrument_engine(engine: Engine) -> None:
+    """Attach SQLAlchemy and custom DB telemetry hooks to an engine once."""
     engine_id = id(engine)
     if engine_id in _INSTRUMENTED_ENGINES:
         return

@@ -1,3 +1,5 @@
+"""FastAPI application factory and lifecycle setup."""
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import logging
@@ -25,6 +27,7 @@ templates = Jinja2Templates(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Manage application startup and shutdown tasks."""
     start_log_listener()
     settings = get_settings()
     initialize_database(settings.database_url)
@@ -42,6 +45,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
     settings = get_settings()
 
     app = FastAPI(

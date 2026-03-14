@@ -1,3 +1,5 @@
+"""FastAPI middleware for request-level observability metrics."""
+
 from __future__ import annotations
 
 import asyncio
@@ -31,6 +33,7 @@ _IN_FLIGHT_REQUESTS = 0
 
 
 def _add_in_flight(delta: int) -> int:
+    """Atomically adjust the in-flight request counter."""
     global _IN_FLIGHT_REQUESTS
     with _IN_FLIGHT_LOCK:
         _IN_FLIGHT_REQUESTS += delta
@@ -38,6 +41,7 @@ def _add_in_flight(delta: int) -> int:
 
 
 def _get_in_flight() -> int:
+    """Return the current in-flight request count."""
     with _IN_FLIGHT_LOCK:
         return _IN_FLIGHT_REQUESTS
 
@@ -81,6 +85,7 @@ def _record_http_metrics(
 
 
 class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
+    """Collect per-request metrics, structured logs, and correlation metadata."""
     async def dispatch(self, request: Request, call_next):
         request.state.ingress_start = perf_counter()
         request_id = uuid4().hex
@@ -207,6 +212,7 @@ class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
 
 
 def _classify_error_type(status_code: int) -> str:
+    """Map HTTP status codes to coarse error categories for metrics."""
     if status_code == 404:
         return "not_found"
     if status_code == 409:

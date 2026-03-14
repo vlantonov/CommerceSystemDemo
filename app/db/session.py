@@ -1,3 +1,5 @@
+"""Database engine, session factory, and schema lifecycle helpers."""
+
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -16,6 +18,7 @@ _active_database_url: str | None = None
 
 
 def initialize_database(database_url: str | None = None, force: bool = False) -> None:
+    """Initialize database."""
     global _engine, _session_factory, _active_database_url
 
     url = database_url or get_settings().database_url
@@ -37,6 +40,7 @@ def initialize_database(database_url: str | None = None, force: bool = False) ->
 
 
 def get_engine() -> AsyncEngine:
+    """Get engine."""
     if _engine is None:
         initialize_database()
     assert _engine is not None
@@ -44,6 +48,7 @@ def get_engine() -> AsyncEngine:
 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Get session factory."""
     if _session_factory is None:
         initialize_database()
     assert _session_factory is not None
@@ -51,6 +56,7 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """Get session."""
     session_factory = get_session_factory()
     async with session_factory() as session:
         yield session
@@ -58,6 +64,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 async def create_schema() -> None:
     # Import models so SQLAlchemy metadata is fully populated before create_all.
+    """Create schema."""
     import app.models  # noqa: F401
 
     engine = get_engine()
@@ -66,6 +73,7 @@ async def create_schema() -> None:
 
 
 async def drop_schema() -> None:
+    """Drop schema."""
     import app.models  # noqa: F401
 
     engine = get_engine()

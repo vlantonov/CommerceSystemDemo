@@ -1,3 +1,5 @@
+"""Shared pytest fixtures for integration and database tests."""
+
 import os
 from collections.abc import AsyncIterator
 
@@ -11,6 +13,7 @@ from app.db.session import create_schema, drop_schema, get_session_factory, init
 
 @pytest.fixture(scope="session")
 def postgres_url() -> str:
+    """Handle postgres url."""
     with PostgresContainer("postgres:16-alpine") as container:
         sync_url = container.get_connection_url()
         async_url = sync_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
@@ -19,12 +22,14 @@ def postgres_url() -> str:
 
 @pytest.fixture(scope="session", autouse=True)
 def configure_database(postgres_url: str) -> None:
+    """Configure database."""
     os.environ["DATABASE_URL"] = postgres_url
     initialize_database(postgres_url, force=True)
 
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session() -> AsyncIterator[AsyncSession]:
+    """Handle db session."""
     await drop_schema()
     await create_schema()
 
