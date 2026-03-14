@@ -8,6 +8,7 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.view import ExplicitBucketHistogramAggregation, View
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -21,6 +22,58 @@ from app.observability.middleware import ObservabilityMetricsMiddleware
 
 _METRICS_PROVIDER_CONFIGURED = False
 _TRACE_PROVIDER_CONFIGURED = False
+
+# Focus histogram precision on sub-second latencies while keeping larger buckets
+# for slow-path visibility.
+_DURATION_BUCKET_BOUNDARIES_SECONDS: tuple[float, ...] = (
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.075,
+    0.1,
+    0.15,
+    0.2,
+    0.3,
+    0.5,
+    0.75,
+    1.0,
+    1.5,
+    2.0,
+    3.0,
+    5.0,
+    7.5,
+    10.0,
+)
+
+
+def _build_metric_views() -> list[View]:
+    """Return metric views with explicit latency buckets for key histograms."""
+    explicit_duration_aggregation = ExplicitBucketHistogramAggregation(
+        boundaries=_DURATION_BUCKET_BOUNDARIES_SECONDS
+    )
+    return [
+        View(
+            instrument_name="commerce_http_request_duration_seconds",
+            aggregation=explicit_duration_aggregation,
+        ),
+        View(
+            instrument_name="commerce_http_response_time_seconds",
+            aggregation=explicit_duration_aggregation,
+        ),
+        View(
+            instrument_name="commerce_http_processing_duration_seconds",
+            aggregation=explicit_duration_aggregation,
+        ),
+        View(
+            instrument_name="commerce_http_queue_wait_duration_seconds",
+            aggregation=explicit_duration_aggregation,
+        ),
+        View(
+            instrument_name="commerce_db_query_duration_seconds",
+            aggregation=explicit_duration_aggregation,
+        ),
+    ]
 
 
 def _build_resource(settings: Settings) -> Resource:
@@ -49,7 +102,11 @@ def _configure_metrics_provider(settings: Settings) -> None:
 
     resource = _build_resource(settings)
     metric_reader = PrometheusMetricReader()
-    meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
+    meter_provider = MeterProvider(
+        resource=resource,
+        metric_readers=[metric_reader],
+        views=_build_metric_views(),
+    )
     metrics.set_meter_provider(meter_provider)
     _METRICS_PROVIDER_CONFIGURED = True
 
