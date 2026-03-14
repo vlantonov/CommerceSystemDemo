@@ -8,8 +8,10 @@ including error cases and validation.
 import pytest
 from decimal import Decimal
 from httpx import AsyncClient, ASGITransport
+from jinja2 import TemplateNotFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import main as app_main
 from app.main import create_app
 from app.db.session import get_session
 
@@ -47,6 +49,29 @@ async def test_home_page_endpoint(client: AsyncClient):
     assert response.headers["content-type"].startswith("text/html")
     assert "Commerce System Demo" in response.text
     assert "/api/v1/search/products" in response.text
+
+
+@pytest.mark.asyncio
+async def test_home_page_endpoint_falls_back_when_template_missing(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    """Test that root endpoint returns fallback page on missing template."""
+
+    def raise_template_not_found(*args, **kwargs):
+        raise TemplateNotFound("index.html")
+
+    monkeypatch.setattr(
+        app_main.templates,
+        "TemplateResponse",
+        raise_template_not_found,
+    )
+
+    response = await client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Template not available in this deployment" in response.text
+    assert "/docs" in response.text
 
 
 # ============================================================================
