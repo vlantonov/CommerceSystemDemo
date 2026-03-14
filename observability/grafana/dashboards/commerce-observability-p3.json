@@ -158,9 +158,13 @@
     {
       "id": 9,
       "type": "heatmap",
-      "title": "Histogram - Response Time Buckets (s)",
+      "title": "Histogram - Response Time Buckets (ms)",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -172,9 +176,13 @@
     {
       "id": 10,
       "type": "heatmap",
-      "title": "Histogram - Processing Time Buckets (s)",
+      "title": "Histogram - Processing Time Buckets (ms)",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -186,9 +194,13 @@
     {
       "id": 11,
       "type": "heatmap",
-      "title": "Histogram - Queue Wait Time Buckets (s)",
+      "title": "Histogram - Queue Wait Time Buckets (ms)",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",

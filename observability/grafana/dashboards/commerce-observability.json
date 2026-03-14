@@ -134,9 +134,13 @@
     {
       "id": 9,
       "type": "heatmap",
-      "title": "Histogram - Request Latency Buckets (s)",
+      "title": "Histogram - Request Latency Buckets (ms)",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -148,9 +152,13 @@
     {
       "id": 10,
       "type": "heatmap",
-      "title": "Histogram - DB Query Duration Buckets (s)",
+      "title": "Histogram - DB Query Duration Buckets (ms)",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
