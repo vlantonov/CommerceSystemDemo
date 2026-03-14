@@ -48,7 +48,7 @@ async def test_home_page_endpoint(client: AsyncClient):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "Commerce System Demo" in response.text
-    assert "/api/v1/search/products" in response.text
+    assert "/api/v1/products/search" in response.text
 
 
 @pytest.mark.asyncio

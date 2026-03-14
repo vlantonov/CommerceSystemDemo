@@ -33,10 +33,10 @@ def _extract_operation(statement: str) -> str:
 def _extract_table(statement: str, operation: str) -> str:
     """Extract a best-effort table name for common SQL operations."""
     patterns: dict[str, str] = {
-        "SELECT": r"\\bFROM\\s+([\\w.\"]+)",
-        "DELETE": r"\\bFROM\\s+([\\w.\"]+)",
-        "INSERT": r"\\bINTO\\s+([\\w.\"]+)",
-        "UPDATE": r"\\bUPDATE\\s+([\\w.\"]+)",
+        "SELECT": r"\bFROM\s+([\w.\"]+)",
+        "DELETE": r"\bFROM\s+([\w.\"]+)",
+        "INSERT": r"\bINTO\s+([\w.\"]+)",
+        "UPDATE": r"\bUPDATE\s+([\w.\"]+)",
     }
     pattern = patterns.get(operation)
     if pattern is None:
