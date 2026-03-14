@@ -541,13 +541,32 @@ REMOTE_APP_PORT=8000
 REMOTE_METRICS_PATH=/metrics
 ```
 
+Example for this deployed site (`https://commercesystemdemo.onrender.com/`):
+
+```bash
+REMOTE_SERVER_ADDRESS=commercesystemdemo.onrender.com
+REMOTE_APP_SCHEME=https
+REMOTE_APP_PORT=443
+REMOTE_METRICS_PATH=/metrics
+```
+
 3. Start the remote-targeted observability stack:
 
 ```bash
 docker compose -f docker-compose.remote.yml --env-file .env.remote up -d
 ```
 
-This stack does not start the `app`, `migrate-indexes`, or `db` services locally. Prometheus scrapes `REMOTE_APP_SCHEME://REMOTE_SERVER_ADDRESS:REMOTE_APP_PORTREMOTE_METRICS_PATH`, while Grafana, Tempo, Loki, and the OpenTelemetry Collector continue to run locally.
+This stack does not start the `app`, `migrate-indexes`, or `db` services locally. Prometheus scrapes `REMOTE_APP_SCHEME://REMOTE_SERVER_ADDRESS:REMOTE_APP_PORT${REMOTE_METRICS_PATH}`, while Grafana, Tempo, Loki, and the OpenTelemetry Collector continue to run locally.
+
+Quick verification for the Render example:
+
+```bash
+curl -sS https://commercesystemdemo.onrender.com/metrics | grep '^commerce_' | head
+```
+
+Then open local dashboards:
+* Grafana: `http://127.0.0.1:3000`
+* Prometheus targets: `http://127.0.0.1:9090/targets`
 
 Remote limitations:
 * Metrics work immediately as long as the remote app exposes `/metrics` publicly or over a reachable private network.
