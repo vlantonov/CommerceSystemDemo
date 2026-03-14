@@ -2,12 +2,13 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.category import Category
+from app.observability.db_timing import timed_get
 
 MAX_CATEGORY_DEPTH = 100
 
 
 async def get_category_or_none(session: AsyncSession, category_id: int) -> Category | None:
-    return await session.get(Category, category_id)
+    return await timed_get(session, Category, category_id)
 
 
 async def category_depth(session: AsyncSession, parent_id: int | None) -> int:
@@ -17,7 +18,7 @@ async def category_depth(session: AsyncSession, parent_id: int | None) -> int:
         depth += 1
         if depth > MAX_CATEGORY_DEPTH:
             return depth
-        parent = await session.get(Category, current_parent_id)
+        parent = await timed_get(session, Category, current_parent_id)
         if parent is None:
             break
         current_parent_id = parent.parent_id
@@ -29,7 +30,7 @@ async def validate_no_cycles(session: AsyncSession, category_id: int, new_parent
     while cursor is not None:
         if cursor == category_id:
             raise ValueError("Category cycle detected")
-        candidate = await session.get(Category, cursor)
+        candidate = await timed_get(session, Category, cursor)
         if candidate is None:
             break
         cursor = candidate.parent_id

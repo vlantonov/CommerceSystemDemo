@@ -2,6 +2,7 @@ from sqlalchemy import func, or_, select
 from time import perf_counter
 
 from app.db.session import get_session_factory
+from app.observability.db_timing import timed_execute_scalar_one, timed_execute_scalars_all
 from app.models.product import Product
 from app.services.category_service import category_subtree_cte
 
@@ -39,7 +40,7 @@ async def search_products(
     # Fetch data first, then release the connection back to the pool before COUNT.
     data_query_start = perf_counter()
     async with get_session_factory()() as data_session:
-        records = (await data_session.execute(query.limit(limit).offset(offset))).scalars().all()
+        records = await timed_execute_scalars_all(data_session, query.limit(limit).offset(offset))
     timing_context["data_query_ms"] = (perf_counter() - data_query_start) * 1000
 
     # Skip COUNT(*) when the total is inferrable from the result set.
@@ -52,7 +53,7 @@ async def search_products(
         total_query = select(func.count()).select_from(query.subquery())
         count_query_start = perf_counter()
         async with get_session_factory()() as count_session:
-            total = (await count_session.execute(total_query)).scalar_one()
+            total = await timed_execute_scalar_one(count_session, total_query)
         timing_context["count_query_ms"] = (perf_counter() - count_query_start) * 1000
 
     return records, total

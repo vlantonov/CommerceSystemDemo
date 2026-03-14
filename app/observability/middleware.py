@@ -142,6 +142,9 @@ class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
             queue_wait_ms = request_state.queue_wait_ms
             handler_ms = request_state.handler_ms
             db_time_ms = request_state.db_time_ms
+            db_acquire_ms = request_state.db_acquire_ms
+            db_execute_fetch_ms = request_state.db_execute_fetch_ms
+            db_time_gap_ms = max(0.0, db_execute_fetch_ms - db_time_ms)
 
             request_logger.log(
                 log_level,
@@ -156,6 +159,9 @@ class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
                     "queue_wait_ms": round(queue_wait_ms, 3),
                     "handler_ms": round(handler_ms, 3),
                     "db_time_ms": round(db_time_ms, 3),
+                    "db_acquire_ms": round(db_acquire_ms, 3),
+                    "db_execute_fetch_ms": round(db_execute_fetch_ms, 3),
+                    "db_time_gap_ms": round(db_time_gap_ms, 3),
                     "db_query_count": request_state.db_query_count,
                     "db_slowest_query_ms": round(request_state.db_slowest_query_ms, 3),
                     "db_slowest_query_name": request_state.db_slowest_query_name,
@@ -181,6 +187,9 @@ class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
                         "queue_wait_ms": round(queue_wait_ms, 3),
                         "handler_ms": round(handler_ms, 3),
                         "db_time_ms": round(db_time_ms, 3),
+                        "db_acquire_ms": round(db_acquire_ms, 3),
+                        "db_execute_fetch_ms": round(db_execute_fetch_ms, 3),
+                        "db_time_gap_ms": round(db_time_gap_ms, 3),
                         "db_query_count": request_state.db_query_count,
                         "db_slowest_query_ms": round(request_state.db_slowest_query_ms, 3),
                         "db_slowest_query_name": request_state.db_slowest_query_name,

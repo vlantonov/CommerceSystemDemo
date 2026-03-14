@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.models.product import Product
+from app.observability.db_timing import timed_execute_scalar_one, timed_execute_scalars_all, timed_get
 from app.observability.metrics import product_mutations_total
 from app.observability.route import ObservabilityRoute
 from app.schemas.common import PaginatedResponse
@@ -42,7 +43,7 @@ async def create_product(payload: ProductCreate, session: AsyncSession = Depends
 
 @router.get("/{product_id}", response_model=ProductRead)
 async def get_product(product_id: int, session: AsyncSession = Depends(get_session)) -> ProductRead:
-    product = await session.get(Product, product_id)
+    product = await timed_get(session, Product, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     return ProductRead.model_validate(product)
@@ -54,11 +55,11 @@ async def list_products(
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> ProductListResponse:
-    records = (await session.execute(select(Product).limit(limit).offset(offset))).scalars().all()
+    records = await timed_execute_scalars_all(session, select(Product).limit(limit).offset(offset))
     if offset == 0 and len(records) < limit:
         total = len(records)
     else:
-        total = (await session.execute(select(func.count()).select_from(Product))).scalar_one()
+        total = await timed_execute_scalar_one(session, select(func.count()).select_from(Product))
     return ProductListResponse(items=[ProductRead.model_validate(item) for item in records], total=total, limit=limit, offset=offset)
 
 
@@ -66,7 +67,7 @@ async def list_products(
 async def update_product(
     product_id: int, payload: ProductUpdate, session: AsyncSession = Depends(get_session)
 ) -> ProductRead:
-    product = await session.get(Product, product_id)
+    product = await timed_get(session, Product, product_id)
     if product is None:
         product_mutations_total.add(1, {"operation": "update", "result": "not_found"})
         logger.warning("product_update_not_found", extra={"product_id": product_id})
@@ -95,7 +96,7 @@ async def update_product(
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(product_id: int, session: AsyncSession = Depends(get_session)) -> None:
-    product = await session.get(Product, product_id)
+    product = await timed_get(session, Product, product_id)
     if product is None:
         product_mutations_total.add(1, {"operation": "delete", "result": "not_found"})
         logger.warning("product_delete_not_found", extra={"product_id": product_id})

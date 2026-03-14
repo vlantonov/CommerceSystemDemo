@@ -47,6 +47,7 @@
    * [10.2. Database and Query Path](#102-database-and-query-path)
    * [10.3. Logging and Metrics Path](#103-logging-and-metrics-path)
    * [10.4. Validation and Benchmarks](#104-validation-and-benchmarks)
+* [11. Investigation Conclusions on 200ms Target](#11-investigation-conclusions-on-200ms-target)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -554,6 +555,57 @@ DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
 LOG_LEVEL=INFO
 ```
 
+If the service is deployed on a remote host (for example Render), set these environment variables in the host's service settings (do not rely only on local `.env`):
+
+```bash
+DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
+DATABASE_POOL_PRE_PING=false
+DATABASE_POOL_SIZE=20
+DATABASE_MAX_OVERFLOW=5
+LOG_LEVEL=INFO
+```
+
+Notes:
+* `DATABASE_POOL_PRE_PING=false` avoids an extra connection-check round trip on each checkout.
+* `DATABASE_POOL_SIZE=20` and `DATABASE_MAX_OVERFLOW=5` are the tuned defaults used for concurrent load.
+* After changing remote environment variables, trigger a redeploy/restart so the running container picks up the new values.
+
+#### Render Checklist (Remote Runtime Verification)
+
+Use this checklist after every Render deploy to confirm that the running instance matches the expected config.
+
+1. In Render Dashboard -> `Environment`, confirm:
+   * `DATABASE_POOL_PRE_PING=false`
+   * `DATABASE_POOL_SIZE=20`
+   * `DATABASE_MAX_OVERFLOW=5`
+
+2. In Render Dashboard -> `Deploys`, confirm the active deploy is the expected commit.
+
+#### Render Postgres Notes (Latency Tuning)
+
+If you still observe a persistent `~100ms` DB latency tier or occasional near-`200ms` mutation paths on Render, apply these checks in order:
+
+1. Region and network:
+   * Keep the web service and Render Postgres in the same region.
+   * Use the private/internal database hostname when available.
+
+2. Database plan sizing:
+   * Upgrade Render Postgres plan (CPU and I/O headroom) if DB metrics show pressure.
+   * Re-run the same load scenario after each plan change for apples-to-apples comparison.
+
+3. Connection settings (service env vars):
+   * `DATABASE_POOL_PRE_PING=false`
+   * `DATABASE_POOL_SIZE=20`
+   * `DATABASE_MAX_OVERFLOW=5`
+
+4. Maintenance:
+   * Run `VACUUM (ANALYZE)` on frequently updated tables.
+   * Keep indexes from `scripts/migrate_indexes.py` applied in production.
+
+Important limitation:
+* Render managed Postgres does not expose all low-level server tuning knobs typical in self-managed Postgres.
+* The `db_time` undercount mismatch seen in some search requests is typically instrumentation-path timing (outside query execute hooks), not a direct Postgres parameter issue.
+
 Start the server locally:
 
 ```bash
@@ -811,6 +863,10 @@ This section summarizes the concrete improvements implemented to reduce latency 
 * Added `COUNT(*)` skip optimization on first-page short results (`offset == 0 and len(records) < limit`) to avoid unnecessary aggregate scans.
 * Added migration helper [scripts/migrate_indexes.py](scripts/migrate_indexes.py) to backfill performance indexes for existing databases, including `pg_trgm` + GIN trigram index for `ILIKE` search on `product.title`.
 * Added DB observability in [app/observability/db.py](app/observability/db.py): query duration metrics, slow-query logs, and pool in-use tracking.
+* Added application-level DB wall-time instrumentation in [app/observability/db_timing.py](app/observability/db_timing.py) and applied it across search, products, and categories paths:
+   * connection acquire timing (`db_acquire_ms`)
+   * execute and fetch wall timing (`db_execute_fetch_ms`)
+   * wrapper helpers for `get`, scalar, and list query patterns
 
 ### 10.3. Logging and Metrics Path
 
@@ -820,6 +876,11 @@ This section summarizes the concrete improvements implemented to reduce latency 
    * startup/shutdown wiring in [app/main.py](app/main.py)
 * Moved HTTP metric recording off the event-loop critical path in [app/observability/middleware.py](app/observability/middleware.py) by dispatching histogram/counter updates to the thread pool via `run_in_executor`.
 * Preserved synchronous in-flight counter updates to keep active-request gauges accurate while offloading heavier metric updates.
+* Extended request logs with DB timing decomposition fields in [app/observability/middleware.py](app/observability/middleware.py):
+   * `db_acquire_ms`
+   * `db_execute_fetch_ms`
+   * `db_time_gap_ms` (`db_execute_fetch_ms - db_time_ms`, clamped at zero)
+* This decomposition makes DB-time undercount mismatches visible in production logs and distinguishes true DB latency from instrumentation-scope gaps.
 
 ### 10.4. Validation and Benchmarks
 
@@ -834,5 +895,23 @@ This section summarizes the concrete improvements implemented to reduce latency 
    * p95 ~196 ms
    * p99 ~373 ms
    * max ~387 ms
+* Post-deployment remote log validation confirms DB timing decomposition is active and useful for diagnosis:
+   * most requests now show a small `db_time_gap_ms` (typically ~0-1 ms)
+   * occasional endpoint-specific outliers remain identifiable for targeted follow-up
 
 These results indicate the service remains stable under heavier concurrent local traffic, with p95 staying near the 200 ms target and tail-latency behavior visible under stress for continued tuning.
+
+## 11. Investigation Conclusions on 200ms Target
+
+The findings below are based on observed load-test runs, production-like remote logs, and the added DB timing decomposition (`db_acquire_ms`, `db_execute_fetch_ms`, `db_time_gap_ms`).
+
+The 200ms target remains the default expectation, but the following scenarios can legitimately exceed it.
+
+* Search requests that require both data retrieval and `COUNT(*)` (for example price-range searches with non-trivial result sets) may exceed 200ms because they execute two DB-heavy phases.
+* Mutation endpoints (`POST`, `PATCH`, `DELETE`) can exceed 200ms under concurrent load because they include validation reads plus write/commit phases in one request.
+* Database slow-tier events (observed as ~90-100ms query durations) can push otherwise normal requests above 200ms, especially when multiple queries occur in the same request.
+* Burst concurrency can temporarily increase queue wait and in-flight pressure, which raises end-to-end latency even when individual SQL statements are healthy.
+* Remote-host conditions (cross-region app/DB placement, undersized managed DB plan, or noisy-neighbor CPU/IO effects) can increase p95/p99 latency.
+* Cold-start and warmup windows after deploy/restart may produce transient latency spikes before caches and pools stabilize.
+
+Mitigation is tracked in the observability dashboards and logs (`request_slow`, DB timing decomposition fields, pool usage), and tuning guidance is documented in the remote service configuration section.

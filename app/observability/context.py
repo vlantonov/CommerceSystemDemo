@@ -11,6 +11,8 @@ class RequestObservabilityState:
     queue_wait_ms: float = 0.0
     handler_ms: float = 0.0
     db_time_ms: float = 0.0
+    db_acquire_ms: float = 0.0
+    db_execute_fetch_ms: float = 0.0
     db_query_count: int = 0
     db_slowest_query_ms: float = 0.0
     db_slowest_query_name: str = ""
