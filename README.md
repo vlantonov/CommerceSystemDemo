@@ -517,6 +517,10 @@ Run in detached mode:
 docker compose up --build -d
 ```
 
+Note:
+* Compose now includes a one-shot `migrate-indexes` service that runs `scripts/migrate_indexes.py` after PostgreSQL becomes healthy.
+* The `app` service waits for this migration to complete successfully before starting.
+
 Stop services:
 
 ```bash

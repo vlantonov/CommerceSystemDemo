@@ -17,6 +17,19 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate-indexes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: commerce-migrate-indexes
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/commerce_demo
+    command: ["python", "scripts/migrate_indexes.py"]
+    depends_on:
+      db:
+        condition: service_healthy
+
   app:
     build:
       context: .
@@ -42,6 +55,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate-indexes:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
 
