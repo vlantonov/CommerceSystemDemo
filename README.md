@@ -521,6 +521,8 @@ docker compose up --build -d
 Note:
 * Compose now includes a one-shot `migrate-indexes` service that runs `scripts/migrate_indexes.py` after PostgreSQL becomes healthy.
 * The `app` service waits for this migration to complete successfully before starting.
+* On a fresh database, `migrate-indexes` now creates the base schema first, then applies indexes, so `docker compose up -d` succeeds on first boot.
+* Optional: set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in your shell or `.env` before `docker compose up` to override the default local database credentials.
 
 #### Option B: Run observability locally against a remote app and database
 
@@ -770,7 +772,6 @@ Logs:
 
 Metrics:
 * `commerce_http_request_duration_seconds` - request latency
-* `commerce_http_response_time_seconds` - response time
 * `commerce_http_response_payload_size_bytes` - response payload size
 * `commerce_http_processing_duration_seconds` - route handler processing time
 * `commerce_http_queue_wait_duration_seconds` - queue wait before handler processing
