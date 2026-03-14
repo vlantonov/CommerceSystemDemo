@@ -47,6 +47,7 @@
    * [10.2. Database and Query Path](#102-database-and-query-path)
    * [10.3. Logging and Metrics Path](#103-logging-and-metrics-path)
    * [10.4. Validation and Benchmarks](#104-validation-and-benchmarks)
+* [11. Investigation Conclusions on 200ms Target](#11-investigation-conclusions-on-200ms-target)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -899,3 +900,18 @@ This section summarizes the concrete improvements implemented to reduce latency 
    * occasional endpoint-specific outliers remain identifiable for targeted follow-up
 
 These results indicate the service remains stable under heavier concurrent local traffic, with p95 staying near the 200 ms target and tail-latency behavior visible under stress for continued tuning.
+
+## 11. Investigation Conclusions on 200ms Target
+
+The findings below are based on observed load-test runs, production-like remote logs, and the added DB timing decomposition (`db_acquire_ms`, `db_execute_fetch_ms`, `db_time_gap_ms`).
+
+The 200ms target remains the default expectation, but the following scenarios can legitimately exceed it.
+
+* Search requests that require both data retrieval and `COUNT(*)` (for example price-range searches with non-trivial result sets) may exceed 200ms because they execute two DB-heavy phases.
+* Mutation endpoints (`POST`, `PATCH`, `DELETE`) can exceed 200ms under concurrent load because they include validation reads plus write/commit phases in one request.
+* Database slow-tier events (observed as ~90-100ms query durations) can push otherwise normal requests above 200ms, especially when multiple queries occur in the same request.
+* Burst concurrency can temporarily increase queue wait and in-flight pressure, which raises end-to-end latency even when individual SQL statements are healthy.
+* Remote-host conditions (cross-region app/DB placement, undersized managed DB plan, or noisy-neighbor CPU/IO effects) can increase p95/p99 latency.
+* Cold-start and warmup windows after deploy/restart may produce transient latency spikes before caches and pools stabilize.
+
+Mitigation is tracked in the observability dashboards and logs (`request_slow`, DB timing decomposition fields, pool usage), and tuning guidance is documented in the remote service configuration section.
