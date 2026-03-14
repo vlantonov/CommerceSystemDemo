@@ -47,10 +47,10 @@ COPY app/ ./app/
 COPY scripts/ ./scripts/
 COPY pyproject.toml README.md ./
 
-# Create an editable install so all sub-packages (app.api, app.core, …) are
-# importable. This only writes a .pth pointer — no recompilation occurs because
-# all compiled extensions were already installed in the builder stage.
-RUN pip install --no-cache-dir --no-build-isolation --no-deps -e . \
+# Install the package so all sub-packages (app.api, app.core, …) are importable.
+# Compiled extensions were already installed in the builder stage; --no-deps avoids
+# reinstalling them.
+RUN pip install --no-cache-dir --no-build-isolation --no-deps . \
  && chown -R appuser:appuser /app
 
 USER appuser
@@ -70,5 +70,8 @@ ENV DATABASE_URL="postgresql+asyncpg://postgres:postgres@db:5432/commerce_demo" 
 # Platforms that auto-detect CPUs will set this automatically;
 # fall back to 2 workers when not set.
 ENV WEB_CONCURRENCY=2
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 CMD uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY}

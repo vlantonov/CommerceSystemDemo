@@ -521,6 +521,8 @@ docker compose up --build -d
 Note:
 * Compose now includes a one-shot `migrate-indexes` service that runs `scripts/migrate_indexes.py` after PostgreSQL becomes healthy.
 * The `app` service waits for this migration to complete successfully before starting.
+* On a fresh database, `migrate-indexes` now creates the base schema first, then applies indexes, so `docker compose up -d` succeeds on first boot.
+* Optional: set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in your shell or `.env` before `docker compose up` to override the default local database credentials.
 
 #### Option B: Run observability locally against a remote app and database
 
@@ -561,7 +563,7 @@ This stack does not start the `app`, `migrate-indexes`, or `db` services locally
 Quick verification for the Render example:
 
 ```bash
-curl -sS https://commercesystemdemo.onrender.com/metrics | grep '^commerce_' | head
+curl -sS https://commercesystemdemo.onrender.com/metrics | grep '^commerce_' | head || true
 ```
 
 Then open local dashboards:
@@ -705,7 +707,7 @@ If you see `Connection refused [Errno 111]`, PostgreSQL is not accessible. Verif
 
 ### 8.3. Testing
 
-The test suite includes **33 integration tests** covering:
+The test suite includes **35 integration tests** covering:
 
 **Service Layer Tests (4 tests)** — `tests/test_search.py`
 * Category subtree filtering with descendants
@@ -713,7 +715,7 @@ The test suite includes **33 integration tests** covering:
 * Title and exact SKU matching
 * Pagination with proper totals
 
-**Endpoint Integration Tests (29 tests)** — `tests/test_api.py`
+**Endpoint Integration Tests (31 tests)** — `tests/test_api.py`
 * CRUD operations for categories and products
 * SKU normalization and validation
 * Category hierarchy and cascade delete
@@ -728,7 +730,7 @@ Run all tests:
 pytest -q
 ```
 
-Expected output: `33 passed`
+Expected output: `35 passed`
 
 Run specific test file:
 
@@ -770,7 +772,6 @@ Logs:
 
 Metrics:
 * `commerce_http_request_duration_seconds` - request latency
-* `commerce_http_response_time_seconds` - response time
 * `commerce_http_response_payload_size_bytes` - response payload size
 * `commerce_http_processing_duration_seconds` - route handler processing time
 * `commerce_http_queue_wait_duration_seconds` - queue wait before handler processing
@@ -903,7 +904,7 @@ If the catalog is already seeded, skip the initial setup phase:
 4. Verify that custom application metrics are present:
 
 ```bash
-curl -s http://127.0.0.1:8000/metrics | grep '^commerce_'
+curl -s http://127.0.0.1:8000/metrics | grep '^commerce_' || true
 ```
 
 5. Verify that logs are queryable in Loki:
@@ -965,7 +966,7 @@ This section summarizes the concrete improvements implemented to reduce latency 
 ### 10.4. Validation and Benchmarks
 
 * Migration status: [scripts/migrate_indexes.py](scripts/migrate_indexes.py) executed successfully against local `commerce_demo` (all index statements applied).
-* Test suite status after migration: `33 passed` (`python -m pytest tests/ -q`).
+* Test suite status after migration: `35 passed` (`python -m pytest tests/ -q`).
 * Local mixed-load validation with [scripts/load_test.py](scripts/load_test.py):
    * `workers=8`, `duration=30s`: ~103 RPS, no functional errors.
    * `workers=16`, `duration=60s`: ~69 RPS sustained, all requests completed successfully.

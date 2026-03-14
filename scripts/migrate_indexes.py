@@ -20,6 +20,9 @@ import asyncio
 import sys
 
 import asyncpg
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from app.db.base import Base
 
 # ---------------------------------------------------------------------------
 # Index definitions
@@ -69,6 +72,17 @@ async def _run(database_url: str) -> None:
     # Mask password in printed output.
     safe_url = url.split("@", 1)[-1] if "@" in url else url
     print(f"Connecting to {safe_url} …")
+
+    # Ensure base tables exist on first boot. The app service also runs
+    # create_all at startup, but it depends on this migration service.
+    import app.models  # noqa: F401
+
+    engine = create_async_engine(database_url, future=True)
+    try:
+        async with engine.begin() as schema_conn:
+            await schema_conn.run_sync(Base.metadata.create_all)
+    finally:
+        await engine.dispose()
 
     # asyncpg operates in autocommit mode by default (no BEGIN/COMMIT wrapper),
     # which is required for CREATE INDEX CONCURRENTLY.

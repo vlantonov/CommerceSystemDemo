@@ -8,6 +8,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from testcontainers.postgres import PostgresContainer
 
+from app.core.config import get_settings
 from app.db.session import create_schema, drop_schema, get_session_factory, initialize_database
 
 
@@ -24,6 +25,7 @@ def postgres_url() -> str:
 def configure_database(postgres_url: str) -> None:
     """Configure database."""
     os.environ["DATABASE_URL"] = postgres_url
+    get_settings.cache_clear()
     initialize_database(postgres_url, force=True)
 
 

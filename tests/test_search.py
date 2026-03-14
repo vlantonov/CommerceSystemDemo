@@ -56,6 +56,7 @@ async def test_search_by_category_includes_descendants(db_session):
     ids = await seed_catalog(db_session)
 
     records, total = await search_products(
+        session=db_session,
         q=None,
         min_price=None,
         max_price=None,
@@ -74,6 +75,7 @@ async def test_search_by_price_range_is_inclusive(db_session):
     await seed_catalog(db_session)
 
     records, total = await search_products(
+        session=db_session,
         q=None,
         min_price=Decimal("59.90"),
         max_price=Decimal("1299.99"),
@@ -92,6 +94,7 @@ async def test_search_by_query_matches_title_or_exact_sku(db_session):
     await seed_catalog(db_session)
 
     title_records, title_total = await search_products(
+        session=db_session,
         q="Ultrabook",
         min_price=None,
         max_price=None,
@@ -103,6 +106,7 @@ async def test_search_by_query_matches_title_or_exact_sku(db_session):
     assert title_records[0].sku == "UBX13-16-512"
 
     sku_records, sku_total = await search_products(
+        session=db_session,
         q="gt-4090",
         min_price=None,
         max_price=None,
@@ -120,6 +124,7 @@ async def test_search_pagination(db_session):
     await seed_catalog(db_session)
 
     page_one, total = await search_products(
+        session=db_session,
         q=None,
         min_price=None,
         max_price=None,
@@ -128,6 +133,7 @@ async def test_search_pagination(db_session):
         offset=0,
     )
     page_two, total_second = await search_products(
+        session=db_session,
         q=None,
         min_price=None,
         max_price=None,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from threading import Lock
 from time import perf_counter
 from uuid import uuid4
 
@@ -25,25 +24,21 @@ from app.observability.metrics import (
     http_requests_total,
     http_requests_in_flight,
     http_response_payload_size_bytes,
-    http_response_time_seconds,
 )
 
-_IN_FLIGHT_LOCK = Lock()
 _IN_FLIGHT_REQUESTS = 0
 
 
 def _add_in_flight(delta: int) -> int:
-    """Atomically adjust the in-flight request counter."""
+    """Adjust the in-flight request counter (safe: single-threaded async event loop)."""
     global _IN_FLIGHT_REQUESTS
-    with _IN_FLIGHT_LOCK:
-        _IN_FLIGHT_REQUESTS += delta
-        return _IN_FLIGHT_REQUESTS
+    _IN_FLIGHT_REQUESTS += delta
+    return _IN_FLIGHT_REQUESTS
 
 
 def _get_in_flight() -> int:
     """Return the current in-flight request count."""
-    with _IN_FLIGHT_LOCK:
-        return _IN_FLIGHT_REQUESTS
+    return _IN_FLIGHT_REQUESTS
 
 
 def _record_http_metrics(
@@ -61,7 +56,6 @@ def _record_http_metrics(
         "http.status_code": str(status_code),
     }
     http_request_duration_seconds.record(request_duration, attributes)
-    http_response_time_seconds.record(request_duration, attributes)
     http_response_payload_size_bytes.record(payload_size, attributes)
     http_requests_total.add(1, attributes)
     if status_code >= 400:
