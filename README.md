@@ -862,6 +862,10 @@ This section summarizes the concrete improvements implemented to reduce latency 
 * Added `COUNT(*)` skip optimization on first-page short results (`offset == 0 and len(records) < limit`) to avoid unnecessary aggregate scans.
 * Added migration helper [scripts/migrate_indexes.py](scripts/migrate_indexes.py) to backfill performance indexes for existing databases, including `pg_trgm` + GIN trigram index for `ILIKE` search on `product.title`.
 * Added DB observability in [app/observability/db.py](app/observability/db.py): query duration metrics, slow-query logs, and pool in-use tracking.
+* Added application-level DB wall-time instrumentation in [app/observability/db_timing.py](app/observability/db_timing.py) and applied it across search, products, and categories paths:
+   * connection acquire timing (`db_acquire_ms`)
+   * execute and fetch wall timing (`db_execute_fetch_ms`)
+   * wrapper helpers for `get`, scalar, and list query patterns
 
 ### 10.3. Logging and Metrics Path
 
@@ -871,6 +875,11 @@ This section summarizes the concrete improvements implemented to reduce latency 
    * startup/shutdown wiring in [app/main.py](app/main.py)
 * Moved HTTP metric recording off the event-loop critical path in [app/observability/middleware.py](app/observability/middleware.py) by dispatching histogram/counter updates to the thread pool via `run_in_executor`.
 * Preserved synchronous in-flight counter updates to keep active-request gauges accurate while offloading heavier metric updates.
+* Extended request logs with DB timing decomposition fields in [app/observability/middleware.py](app/observability/middleware.py):
+   * `db_acquire_ms`
+   * `db_execute_fetch_ms`
+   * `db_time_gap_ms` (`db_execute_fetch_ms - db_time_ms`, clamped at zero)
+* This decomposition makes DB-time undercount mismatches visible in production logs and distinguishes true DB latency from instrumentation-scope gaps.
 
 ### 10.4. Validation and Benchmarks
 
@@ -885,5 +894,8 @@ This section summarizes the concrete improvements implemented to reduce latency 
    * p95 ~196 ms
    * p99 ~373 ms
    * max ~387 ms
+* Post-deployment remote log validation confirms DB timing decomposition is active and useful for diagnosis:
+   * most requests now show a small `db_time_gap_ms` (typically ~0-1 ms)
+   * occasional endpoint-specific outliers remain identifiable for targeted follow-up
 
 These results indicate the service remains stable under heavier concurrent local traffic, with p95 staying near the 200 ms target and tail-latency behavior visible under stress for continued tuning.
