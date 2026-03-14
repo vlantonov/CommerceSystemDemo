@@ -1,3 +1,5 @@
+"""Initialization helpers for tracing and metrics providers."""
+
 from __future__ import annotations
 
 from fastapi import FastAPI, Response
@@ -22,6 +24,7 @@ _TRACE_PROVIDER_CONFIGURED = False
 
 
 def _build_resource(settings: Settings) -> Resource:
+    """Build OpenTelemetry resource attributes from runtime settings."""
     attributes = {
         "service.name": settings.otel_service_name,
         "service.version": "0.1.0",
@@ -39,6 +42,7 @@ def _build_resource(settings: Settings) -> Resource:
 
 
 def _configure_metrics_provider(settings: Settings) -> None:
+    """Initialize and register the OpenTelemetry metrics provider once."""
     global _METRICS_PROVIDER_CONFIGURED
     if _METRICS_PROVIDER_CONFIGURED:
         return
@@ -51,6 +55,7 @@ def _configure_metrics_provider(settings: Settings) -> None:
 
 
 def _configure_trace_provider(settings: Settings) -> None:
+    """Initialize and register the OpenTelemetry trace provider once."""
     global _TRACE_PROVIDER_CONFIGURED
     if _TRACE_PROVIDER_CONFIGURED:
         return
@@ -73,6 +78,7 @@ def _configure_trace_provider(settings: Settings) -> None:
 
 
 def _add_metrics_endpoint(app: FastAPI, settings: Settings) -> None:
+    """Expose a Prometheus scrape endpoint when metrics are enabled."""
     if not settings.otel_metrics_enabled:
         return
 
@@ -87,6 +93,7 @@ def _add_metrics_endpoint(app: FastAPI, settings: Settings) -> None:
 
 
 def initialize_app_observability(app: FastAPI, settings: Settings) -> None:
+    """Wire logging, metrics, tracing, and request middleware into the app."""
     initialize_logging(settings)
 
     if not settings.telemetry_enabled:
@@ -103,6 +110,7 @@ def initialize_app_observability(app: FastAPI, settings: Settings) -> None:
 
 
 def initialize_database_observability(engine: AsyncEngine, settings: Settings) -> None:
+    """Attach database instrumentation hooks when telemetry is enabled."""
     if not settings.telemetry_enabled:
         return
     instrument_engine(engine.sync_engine)

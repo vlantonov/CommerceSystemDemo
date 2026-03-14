@@ -1,3 +1,5 @@
+"""Category ORM model definitions."""
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
@@ -7,6 +9,7 @@ from app.db.base import Base
 
 
 class Category(Base):
+    """ORM model for category."""
     __tablename__ = "category"
     __table_args__ = (UniqueConstraint("parent_id", "name", name="uq_category_parent_name"),)
 

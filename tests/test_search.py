@@ -1,3 +1,5 @@
+"""Integration tests for product search service behavior."""
+
 from decimal import Decimal
 
 import pytest
@@ -8,6 +10,7 @@ from app.services.product_service import search_products
 
 
 async def seed_catalog(db_session):
+    """Seed catalog."""
     root = Category(name="Electronics")
     child = Category(name="Laptops", parent=root)
     other = Category(name="Books")
@@ -49,6 +52,7 @@ async def seed_catalog(db_session):
 
 @pytest.mark.asyncio
 async def test_search_by_category_includes_descendants(db_session):
+    """Test search by category includes descendants."""
     ids = await seed_catalog(db_session)
 
     records, total = await search_products(
@@ -66,6 +70,7 @@ async def test_search_by_category_includes_descendants(db_session):
 
 @pytest.mark.asyncio
 async def test_search_by_price_range_is_inclusive(db_session):
+    """Test search by price range is inclusive."""
     await seed_catalog(db_session)
 
     records, total = await search_products(
@@ -83,6 +88,7 @@ async def test_search_by_price_range_is_inclusive(db_session):
 
 @pytest.mark.asyncio
 async def test_search_by_query_matches_title_or_exact_sku(db_session):
+    """Test search by query matches title or exact sku."""
     await seed_catalog(db_session)
 
     title_records, title_total = await search_products(
@@ -110,6 +116,7 @@ async def test_search_by_query_matches_title_or_exact_sku(db_session):
 
 @pytest.mark.asyncio
 async def test_search_pagination(db_session):
+    """Test search pagination."""
     await seed_catalog(db_session)
 
     page_one, total = await search_products(

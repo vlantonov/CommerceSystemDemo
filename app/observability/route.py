@@ -1,3 +1,5 @@
+"""Custom APIRoute implementation with observability hooks."""
+
 from __future__ import annotations
 
 from time import perf_counter
@@ -9,6 +11,7 @@ from app.observability.metrics import http_processing_duration_seconds, http_que
 
 
 class ObservabilityRoute(APIRoute):
+    """APIRoute wrapper that records queue wait and handler processing times."""
     def get_route_handler(self):
         original_route_handler = super().get_route_handler()
 

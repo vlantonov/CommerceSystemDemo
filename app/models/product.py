@@ -1,3 +1,5 @@
+"""Product ORM model definitions."""
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -8,6 +10,7 @@ from app.db.base import Base
 
 
 class Product(Base):
+    """ORM model for product."""
     __tablename__ = "product"
     __table_args__ = (
         UniqueConstraint("sku", name="uq_product_sku"),

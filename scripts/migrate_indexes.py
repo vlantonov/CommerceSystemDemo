@@ -64,6 +64,7 @@ def _asyncpg_url(database_url: str) -> str:
 
 
 async def _run(database_url: str) -> None:
+    """Execute index and extension migrations against the target database."""
     url = _asyncpg_url(database_url)
     # Mask password in printed output.
     safe_url = url.split("@", 1)[-1] if "@" in url else url
@@ -98,6 +99,7 @@ async def _run(database_url: str) -> None:
 
 
 def main() -> None:
+    """Parse inputs, resolve DB URL, and run async migration execution."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--database-url",

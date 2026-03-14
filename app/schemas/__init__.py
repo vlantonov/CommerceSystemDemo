@@ -1,3 +1,5 @@
+"""Pydantic schema exports for API contracts."""
+
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.common import PaginatedResponse
 from app.schemas.product import ProductCreate, ProductRead, ProductSearchResponse, ProductUpdate

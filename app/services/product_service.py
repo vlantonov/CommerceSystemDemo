@@ -1,3 +1,5 @@
+"""Product business logic helpers and search orchestration."""
+
 from sqlalchemy import func, or_, select
 from time import perf_counter
 
@@ -17,6 +19,7 @@ async def search_products(
     offset: int,
     timing_context: dict[str, float] | None = None,
 ):
+    """Return filtered products and total count with phase timing telemetry."""
     timing_context = timing_context if timing_context is not None else {}
 
     query_build_start = perf_counter()

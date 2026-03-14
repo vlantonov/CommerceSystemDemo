@@ -1,3 +1,5 @@
+"""FastAPI router aggregation for public API endpoints."""
+
 from fastapi import APIRouter
 
 from app.api.categories import router as categories_router

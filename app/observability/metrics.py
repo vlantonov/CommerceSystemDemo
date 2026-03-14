@@ -1,3 +1,5 @@
+"""Prometheus metric definitions for API and database activity."""
+
 from opentelemetry import metrics
 from opentelemetry.metrics import Counter, Histogram, UpDownCounter
 

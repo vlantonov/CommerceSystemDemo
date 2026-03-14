@@ -1,3 +1,5 @@
+"""Category API endpoints for CRUD operations."""
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,11 +21,13 @@ logger = logging.getLogger("app.categories")
 
 
 class CategoryListResponse(PaginatedResponse):
+    """Response model for categorylist endpoints."""
     items: list[CategoryRead]
 
 
 @router.post("", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
 async def create_category(payload: CategoryCreate, session: AsyncSession = Depends(get_session)) -> CategoryRead:
+    """Create category."""
     if payload.parent_id is not None:
         parent = await get_category_or_none(session, payload.parent_id)
         if parent is None:
@@ -72,6 +76,7 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
 
 @router.get("/{category_id}", response_model=CategoryRead)
 async def get_category(category_id: int, session: AsyncSession = Depends(get_session)) -> CategoryRead:
+    """Get category."""
     category = await get_category_or_none(session, category_id)
     if category is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
@@ -84,6 +89,7 @@ async def list_categories(
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> CategoryListResponse:
+    """List categories."""
     records = await timed_execute_scalars_all(session, select(Category).limit(limit).offset(offset))
     total = await timed_execute_scalar_one(session, select(func.count()).select_from(Category))
     return CategoryListResponse(items=[CategoryRead.model_validate(item) for item in records], total=total, limit=limit, offset=offset)
@@ -93,6 +99,7 @@ async def list_categories(
 async def update_category(
     category_id: int, payload: CategoryUpdate, session: AsyncSession = Depends(get_session)
 ) -> CategoryRead:
+    """Update category."""
     category = await get_category_or_none(session, category_id)
     if category is None:
         category_mutations_total.add(1, {"operation": "update", "result": "not_found"})
@@ -170,6 +177,7 @@ async def update_category(
 
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_category(category_id: int, session: AsyncSession = Depends(get_session)) -> None:
+    """Delete category."""
     category = await get_category_or_none(session, category_id)
     if category is None:
         category_mutations_total.add(1, {"operation": "delete", "result": "not_found"})
