@@ -1,5 +1,4 @@
 from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from time import perf_counter
 
 from app.db.session import get_session_factory
@@ -8,7 +7,6 @@ from app.services.category_service import category_subtree_cte
 
 
 async def search_products(
-    session: AsyncSession,
     *,
     q: str | None,
     min_price,
@@ -38,9 +36,10 @@ async def search_products(
         query = query.where(Product.category_id.in_(select(category_tree.c.id)))
     timing_context["query_build_ms"] = (perf_counter() - query_build_start) * 1000
 
-    # Fetch data first using LIMIT — this is always fast.
+    # Fetch data first, then release the connection back to the pool before COUNT.
     data_query_start = perf_counter()
-    records = (await session.execute(query.limit(limit).offset(offset))).scalars().all()
+    async with get_session_factory()() as data_session:
+        records = (await data_session.execute(query.limit(limit).offset(offset))).scalars().all()
     timing_context["data_query_ms"] = (perf_counter() - data_query_start) * 1000
 
     # Skip COUNT(*) when the total is inferrable from the result set.
