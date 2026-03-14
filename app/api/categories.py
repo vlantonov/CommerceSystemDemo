@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_session
 from app.models.category import Category
 from app.observability.metrics import category_mutations_total, category_validation_failures_total
+from app.observability.route import ObservabilityRoute
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.common import PaginatedResponse
 from app.services.category_service import MAX_CATEGORY_DEPTH, category_depth, get_category_or_none, validate_no_cycles
 
-router = APIRouter()
+router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.categories")
 
 

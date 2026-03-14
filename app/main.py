@@ -11,6 +11,8 @@ from app.observability import (
     ObservabilityRoute,
     initialize_app_observability,
     initialize_database_observability,
+    start_log_listener,
+    stop_log_listener,
 )
 
 logger = logging.getLogger("app.lifecycle")
@@ -18,6 +20,7 @@ logger = logging.getLogger("app.lifecycle")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    start_log_listener()
     settings = get_settings()
     initialize_database(settings.database_url)
     initialize_database_observability(get_engine(), settings)
@@ -30,6 +33,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
 
     logger.info("application_shutdown")
+    stop_log_listener()
 
 
 def create_app() -> FastAPI:

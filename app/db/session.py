@@ -22,7 +22,16 @@ def initialize_database(database_url: str | None = None, force: bool = False) ->
     if _engine is not None and _active_database_url == url and not force:
         return
 
-    _engine = create_async_engine(url, future=True)
+    settings = get_settings()
+    _engine = create_async_engine(
+        url,
+        future=True,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_timeout=settings.database_pool_timeout,
+        pool_pre_ping=settings.database_pool_pre_ping,
+        pool_recycle=settings.database_pool_recycle,
+    )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False, autoflush=False)
     _active_database_url = url
 

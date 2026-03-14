@@ -8,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_session
 from app.models.product import Product
 from app.observability.metrics import product_mutations_total
+from app.observability.route import ObservabilityRoute
 from app.schemas.common import PaginatedResponse
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 
-router = APIRouter()
+router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.products")
 
 
@@ -54,7 +55,10 @@ async def list_products(
     session: AsyncSession = Depends(get_session),
 ) -> ProductListResponse:
     records = (await session.execute(select(Product).limit(limit).offset(offset))).scalars().all()
-    total = (await session.execute(select(func.count()).select_from(Product))).scalar_one()
+    if offset == 0 and len(records) < limit:
+        total = len(records)
+    else:
+        total = (await session.execute(select(func.count()).select_from(Product))).scalar_one()
     return ProductListResponse(items=[ProductRead.model_validate(item) for item in records], total=total, limit=limit, offset=offset)
 
 
