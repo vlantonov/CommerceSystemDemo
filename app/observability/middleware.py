@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from threading import Lock
 from time import perf_counter
@@ -41,6 +42,44 @@ def _get_in_flight() -> int:
         return _IN_FLIGHT_REQUESTS
 
 
+def _record_http_metrics(
+    request_duration: float,
+    payload_size: int,
+    status_code: int,
+    exception_class: str | None,
+    method: str,
+    route_path: str,
+) -> None:
+    """Record HTTP metrics on a thread-pool thread to avoid Prometheus scrape mutex contention."""
+    attributes = {
+        "http.method": method,
+        "http.route": route_path,
+        "http.status_code": str(status_code),
+    }
+    http_request_duration_seconds.record(request_duration, attributes)
+    http_response_time_seconds.record(request_duration, attributes)
+    http_response_payload_size_bytes.record(payload_size, attributes)
+    http_requests_total.add(1, attributes)
+    if status_code >= 400:
+        http_errors_total.add(
+            1,
+            {
+                **attributes,
+                "http.status_class": f"{status_code // 100}xx",
+                "error_type": _classify_error_type(status_code),
+            },
+        )
+    if exception_class is not None:
+        http_exceptions_total.add(
+            1,
+            {
+                "http.method": method,
+                "http.route": route_path,
+                "exception_class": exception_class,
+            },
+        )
+
+
 class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request.state.ingress_start = perf_counter()
@@ -80,39 +119,18 @@ class ObservabilityMetricsMiddleware(BaseHTTPMiddleware):
             route = request.scope.get("route")
             route_path = getattr(route, "path", request.url.path)
 
-            attributes = {
-                "http.method": request.method,
-                "http.route": route_path,
-                "http.status_code": str(status_code),
-            }
-
-            http_request_duration_seconds.record(request_duration, attributes)
-            http_response_time_seconds.record(request_duration, attributes)
-            http_response_payload_size_bytes.record(payload_size, attributes)
-            http_requests_total.add(1, attributes)
-
-            if status_code >= 400:
-                http_errors_total.add(
-                    1,
-                    {
-                        **attributes,
-                        "http.status_class": f"{status_code // 100}xx",
-                        "error_type": _classify_error_type(status_code),
-                    },
-                )
-
-            if exception_class is not None:
-                http_exceptions_total.add(
-                    1,
-                    {
-                        "http.method": request.method,
-                        "http.route": route_path,
-                        "exception_class": exception_class,
-                    },
-                )
-
+            # Decrement in-flight counters synchronously — must reflect active request count.
             http_requests_in_flight.add(-1, in_flight_attributes)
             _add_in_flight(-1)
+
+            # Schedule histogram/counter recording on a thread-pool thread to avoid
+            # blocking the event loop on the Prometheus scrape mutex.
+            asyncio.get_running_loop().run_in_executor(
+                None,
+                _record_http_metrics,
+                request_duration, payload_size, status_code, exception_class,
+                request.method, route_path,
+            )
 
             request_logger = logging.getLogger("app.request")
             log_level = logging.INFO
