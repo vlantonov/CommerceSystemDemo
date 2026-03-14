@@ -70,6 +70,10 @@
       "title": "P95 Request Latency (ms)",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -84,6 +88,10 @@
       "title": "P95 DB Query Duration (ms)",
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -120,6 +128,42 @@
           "spss": 3,
           "tableType": "traces",
           "filters": []
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "heatmap",
+      "title": "Histogram - Request Latency Buckets (ms)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_http_request_duration_seconds_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "heatmap",
+      "title": "Histogram - DB Query Duration Buckets (ms)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_db_query_duration_seconds_bucket[5m])) by (le)",
+          "legendFormat": "{{le}}"
         }
       ]
     }
