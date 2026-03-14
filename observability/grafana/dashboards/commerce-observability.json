@@ -70,6 +70,10 @@
       "title": "P95 Request Latency (ms)",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -84,6 +88,10 @@
       "title": "P95 DB Query Duration (ms)",
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",

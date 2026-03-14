@@ -14,6 +14,10 @@
       "title": "P95 Response Time (ms)",
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -28,6 +32,10 @@
       "title": "P95 Processing Time (ms)",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -42,6 +50,10 @@
       "title": "P95 Queue Wait Time (ms)",
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -70,6 +82,10 @@
       "title": "DB Query Duration by Operation (ms)",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
