@@ -3,8 +3,10 @@
 from decimal import Decimal
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
+from app.db.session import get_session
 from app.observability.metrics import search_requests_total, search_result_count, search_zero_results_total
 from app.observability.route import ObservabilityRoute
 from app.schemas.product import ProductRead, ProductSearchResponse
@@ -23,6 +25,7 @@ async def search_products_endpoint(
     category_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
 ) -> ProductSearchResponse:
     """Search products by text, price range, and category subtree filters."""
     search_attributes = {
@@ -41,6 +44,7 @@ async def search_products_endpoint(
 
     search_timing: dict[str, float] = {}
     products, total = await search_products(
+        session=session,
         q=q,
         min_price=min_price,
         max_price=max_price,

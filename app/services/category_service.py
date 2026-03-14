@@ -9,6 +9,18 @@ from app.observability.db_timing import timed_get
 MAX_CATEGORY_DEPTH = 100
 
 
+class CategoryParentNotFoundError(LookupError):
+    """Raised when a referenced parent category does not exist."""
+
+
+class CategoryDepthError(ValueError):
+    """Raised when attaching to a parent would exceed the maximum depth."""
+
+
+class CategoryCycleError(ValueError):
+    """Raised when re-parenting a category would create a cycle."""
+
+
 async def get_category_or_none(session: AsyncSession, category_id: int) -> Category | None:
     """Return a category by id, or `None` if it does not exist."""
     return await timed_get(session, Category, category_id)
@@ -51,3 +63,42 @@ def category_subtree_cte(root_category_id: int):
         select(category_alias.c.id).where(category_alias.c.parent_id == category_tree.c.id)
     )
     return category_tree
+
+
+async def validate_category_parent(session: AsyncSession, parent_id: int) -> None:
+    """Validate that a parent category exists and is within depth limits.
+
+    Raises:
+        CategoryParentNotFoundError: if the parent does not exist.
+        CategoryDepthError: if attaching here would exceed MAX_CATEGORY_DEPTH.
+    """
+    parent = await get_category_or_none(session, parent_id)
+    if parent is None:
+        raise CategoryParentNotFoundError(parent_id)
+    depth = await category_depth(session, parent_id)
+    if depth >= MAX_CATEGORY_DEPTH:
+        raise CategoryDepthError(MAX_CATEGORY_DEPTH)
+
+
+async def validate_category_reparent(
+    session: AsyncSession, category_id: int, new_parent_id: int | None
+) -> None:
+    """Validate re-parenting a category: parent exists, no cycles, depth within limits.
+
+    Raises:
+        CategoryParentNotFoundError: if the new parent does not exist.
+        CategoryCycleError: if the re-parent creates a cycle.
+        CategoryDepthError: if the re-parent would exceed MAX_CATEGORY_DEPTH.
+    """
+    if new_parent_id is None:
+        return
+    parent = await get_category_or_none(session, new_parent_id)
+    if parent is None:
+        raise CategoryParentNotFoundError(new_parent_id)
+    try:
+        await validate_no_cycles(session, category_id, new_parent_id)
+    except ValueError as exc:
+        raise CategoryCycleError(str(exc)) from exc
+    depth = await category_depth(session, new_parent_id)
+    if depth >= MAX_CATEGORY_DEPTH:
+        raise CategoryDepthError(MAX_CATEGORY_DEPTH)

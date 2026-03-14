@@ -1,9 +1,9 @@
 """Product business logic helpers and search orchestration."""
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from time import perf_counter
 
-from app.db.session import get_session_factory
 from app.observability.db_timing import timed_execute_scalar_one, timed_execute_scalars_all
 from app.models.product import Product
 from app.services.category_service import category_subtree_cte
@@ -11,6 +11,7 @@ from app.services.category_service import category_subtree_cte
 
 async def search_products(
     *,
+    session: AsyncSession,
     q: str | None,
     min_price,
     max_price,
@@ -40,10 +41,9 @@ async def search_products(
         query = query.where(Product.category_id.in_(select(category_tree.c.id)))
     timing_context["query_build_ms"] = (perf_counter() - query_build_start) * 1000
 
-    # Fetch data first, then release the connection back to the pool before COUNT.
+    # Fetch data and count on the provided session for a consistent snapshot.
     data_query_start = perf_counter()
-    async with get_session_factory()() as data_session:
-        records = await timed_execute_scalars_all(data_session, query.limit(limit).offset(offset))
+    records = await timed_execute_scalars_all(session, query.limit(limit).offset(offset))
     timing_context["data_query_ms"] = (perf_counter() - data_query_start) * 1000
 
     # Skip COUNT(*) when the total is inferrable from the result set.
@@ -55,8 +55,7 @@ async def search_products(
     else:
         total_query = select(func.count()).select_from(query.subquery())
         count_query_start = perf_counter()
-        async with get_session_factory()() as count_session:
-            total = await timed_execute_scalar_one(count_session, total_query)
+        total = await timed_execute_scalar_one(session, total_query)
         timing_context["count_query_ms"] = (perf_counter() - count_query_start) * 1000
 
     return records, total

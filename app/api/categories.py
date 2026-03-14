@@ -14,7 +14,15 @@ from app.observability.metrics import category_mutations_total, category_validat
 from app.observability.route import ObservabilityRoute
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.common import PaginatedResponse
-from app.services.category_service import MAX_CATEGORY_DEPTH, category_depth, get_category_or_none, validate_no_cycles
+from app.services.category_service import (
+    MAX_CATEGORY_DEPTH,
+    CategoryCycleError,
+    CategoryDepthError,
+    CategoryParentNotFoundError,
+    get_category_or_none,
+    validate_category_parent,
+    validate_category_reparent,
+)
 
 router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.categories")
@@ -29,20 +37,19 @@ class CategoryListResponse(PaginatedResponse):
 async def create_category(payload: CategoryCreate, session: AsyncSession = Depends(get_session)) -> CategoryRead:
     """Create category."""
     if payload.parent_id is not None:
-        parent = await get_category_or_none(session, payload.parent_id)
-        if parent is None:
+        try:
+            await validate_category_parent(session, payload.parent_id)
+        except CategoryParentNotFoundError:
             category_validation_failures_total.add(1, {"reason": "parent_not_found"})
             category_mutations_total.add(1, {"operation": "create", "result": "parent_not_found"})
             logger.warning("category_create_parent_not_found", extra={"parent_id": payload.parent_id})
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent category not found")
-
-        depth = await category_depth(session, payload.parent_id)
-        if depth >= MAX_CATEGORY_DEPTH:
+        except CategoryDepthError:
             category_validation_failures_total.add(1, {"reason": "depth_exceeded"})
             category_mutations_total.add(1, {"operation": "create", "result": "depth_exceeded"})
             logger.warning(
                 "category_create_depth_exceeded",
-                extra={"parent_id": payload.parent_id, "depth": depth, "max_depth": MAX_CATEGORY_DEPTH},
+                extra={"parent_id": payload.parent_id, "max_depth": MAX_CATEGORY_DEPTH},
             )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -91,7 +98,10 @@ async def list_categories(
 ) -> CategoryListResponse:
     """List categories."""
     records = await timed_execute_scalars_all(session, select(Category).limit(limit).offset(offset))
-    total = await timed_execute_scalar_one(session, select(func.count()).select_from(Category))
+    if offset == 0 and len(records) < limit:
+        total = len(records)
+    else:
+        total = await timed_execute_scalar_one(session, select(func.count()).select_from(Category))
     return CategoryListResponse(items=[CategoryRead.model_validate(item) for item in records], total=total, limit=limit, offset=offset)
 
 
@@ -110,45 +120,35 @@ async def update_category(
 
     if "parent_id" in updates:
         new_parent_id = updates["parent_id"]
-        if new_parent_id is not None:
-            parent = await get_category_or_none(session, new_parent_id)
-            if parent is None:
-                category_validation_failures_total.add(1, {"reason": "parent_not_found"})
-                category_mutations_total.add(1, {"operation": "update", "result": "parent_not_found"})
-                logger.warning(
-                    "category_update_parent_not_found",
-                    extra={"category_id": category_id, "parent_id": new_parent_id},
-                )
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent category not found")
-
-            try:
-                await validate_no_cycles(session, category_id, new_parent_id)
-            except ValueError as exc:
-                category_validation_failures_total.add(1, {"reason": "cycle_detected"})
-                category_mutations_total.add(1, {"operation": "update", "result": "cycle_detected"})
-                logger.warning(
-                    "category_update_cycle_detected",
-                    extra={"category_id": category_id, "parent_id": new_parent_id},
-                )
-                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-            depth = await category_depth(session, new_parent_id)
-            if depth >= MAX_CATEGORY_DEPTH:
-                category_validation_failures_total.add(1, {"reason": "depth_exceeded"})
-                category_mutations_total.add(1, {"operation": "update", "result": "depth_exceeded"})
-                logger.warning(
-                    "category_update_depth_exceeded",
-                    extra={
-                        "category_id": category_id,
-                        "parent_id": new_parent_id,
-                        "depth": depth,
-                        "max_depth": MAX_CATEGORY_DEPTH,
-                    },
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"Category depth cannot exceed {MAX_CATEGORY_DEPTH}",
-                )
+        try:
+            await validate_category_reparent(session, category_id, new_parent_id)
+        except CategoryParentNotFoundError:
+            category_validation_failures_total.add(1, {"reason": "parent_not_found"})
+            category_mutations_total.add(1, {"operation": "update", "result": "parent_not_found"})
+            logger.warning(
+                "category_update_parent_not_found",
+                extra={"category_id": category_id, "parent_id": new_parent_id},
+            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent category not found")
+        except CategoryCycleError as exc:
+            category_validation_failures_total.add(1, {"reason": "cycle_detected"})
+            category_mutations_total.add(1, {"operation": "update", "result": "cycle_detected"})
+            logger.warning(
+                "category_update_cycle_detected",
+                extra={"category_id": category_id, "parent_id": new_parent_id},
+            )
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        except CategoryDepthError:
+            category_validation_failures_total.add(1, {"reason": "depth_exceeded"})
+            category_mutations_total.add(1, {"operation": "update", "result": "depth_exceeded"})
+            logger.warning(
+                "category_update_depth_exceeded",
+                extra={"category_id": category_id, "parent_id": new_parent_id, "max_depth": MAX_CATEGORY_DEPTH},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Category depth cannot exceed {MAX_CATEGORY_DEPTH}",
+            )
         category.parent_id = new_parent_id
 
     if "name" in updates and updates["name"] is not None:
