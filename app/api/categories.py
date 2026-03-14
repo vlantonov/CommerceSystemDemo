@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.models.category import Category
+from app.observability.db_timing import timed_execute_scalar_one, timed_execute_scalars_all
 from app.observability.metrics import category_mutations_total, category_validation_failures_total
 from app.observability.route import ObservabilityRoute
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
@@ -83,8 +84,8 @@ async def list_categories(
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> CategoryListResponse:
-    records = (await session.execute(select(Category).limit(limit).offset(offset))).scalars().all()
-    total = (await session.execute(select(func.count()).select_from(Category))).scalar_one()
+    records = await timed_execute_scalars_all(session, select(Category).limit(limit).offset(offset))
+    total = await timed_execute_scalar_one(session, select(func.count()).select_from(Category))
     return CategoryListResponse(items=[CategoryRead.model_validate(item) for item in records], total=total, limit=limit, offset=offset)
 
 
