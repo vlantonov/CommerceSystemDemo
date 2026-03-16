@@ -61,7 +61,7 @@ async def list_products(
     session: AsyncSession = Depends(get_session),
 ) -> ProductListResponse:
     """List products."""
-    records = await timed_execute_scalars_all(session, select(Product).limit(limit).offset(offset))
+    records = await timed_execute_scalars_all(session, select(Product).order_by(Product.id).limit(limit).offset(offset))
     if offset == 0 and len(records) < limit:
         total = len(records)
     else:

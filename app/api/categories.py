@@ -97,7 +97,7 @@ async def list_categories(
     session: AsyncSession = Depends(get_session),
 ) -> CategoryListResponse:
     """List categories."""
-    records = await timed_execute_scalars_all(session, select(Category).limit(limit).offset(offset))
+    records = await timed_execute_scalars_all(session, select(Category).order_by(Category.id).limit(limit).offset(offset))
     if offset == 0 and len(records) < limit:
         total = len(records)
     else:

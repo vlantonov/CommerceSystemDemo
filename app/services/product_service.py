@@ -39,6 +39,8 @@ async def search_products(
     if category_id is not None:
         category_tree = category_subtree_cte(category_id)
         query = query.where(Product.category_id.in_(select(category_tree.c.id)))
+
+    query = query.order_by(Product.id)
     timing_context["query_build_ms"] = (perf_counter() - query_build_start) * 1000
 
     # Fetch data and count on the provided session for a consistent snapshot.
