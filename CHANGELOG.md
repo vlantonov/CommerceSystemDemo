@@ -1,0 +1,161 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Planned
+
+- Enhanced search with full-text indexing support
+- Bulk import/export endpoints for products and categories
+- Rate limiting and request throttling
+- Advanced filtering options for product search
+- Product images storage optimization
+
+## [0.1.0] - 2024-03-19
+
+### Added
+
+- Initial release of Commerce System Demo
+- Product CRUD operations (Create, Read, Update, Delete)
+  - Product title, description, SKU, price, and category assignment
+  - SKU normalization (automatic uppercase conversion)
+  - Unique SKU constraint at database level
+- Category management with hierarchical support
+  - Category hierarchy with parent-child relationships
+  - Depth limit validation (max 5 levels)
+  - Automatic cascading delete of child categories
+- Product search functionality
+  - Full-text search by product title
+  - Exact SKU search with normalization
+  - Price range filtering (min/max)
+  - Category subtree filtering
+  - Pagination support (limit, offset)
+- Input validation and whitespace handling
+  - Pydantic v2 schema validators for data integrity
+  - Automatic stripping of leading/trailing whitespace
+  - Rejection of space-only product names and category names
+- RESTful API with standardized error handling
+  - HTTP status codes: 201 (Created), 400 (Bad Request), 404 (Not Found), 409 (Conflict), 422 (Unprocessable Entity)
+  - Structured error responses with detailed messages
+- Comprehensive test suite
+  - 39 integration tests covering CRUD operations
+  - Space-only name validation tests
+  - Search functionality tests
+  - Database constraint validation tests
+  - Test fixtures with real PostgreSQL via testcontainers
+- Observability and monitoring
+  - OpenTelemetry instrumentation for metrics and tracing
+  - Custom metrics for mutation operations and search requests
+  - Structured logging with contextual data
+  - Prometheus metrics export
+  - Grafana dashboards for monitoring
+  - Distributed tracing support
+  - Loki log aggregation
+  - Alerting rules for critical issues
+- Docker support
+  - Dockerfile for containerized deployment
+  - Docker Compose orchestration (app, PostgreSQL, monitoring stack)
+  - Migration service for database schema setup
+- FastAPI with async/await
+  - Async SQLAlchemy 2.0+ integration
+  - Asynchronous database queries
+  - Async context managers for proper resource cleanup
+- Project documentation
+  - Comprehensive README with architecture and design details
+  - API conventions and endpoint specifications
+  - Non-functional requirements documentation
+
+### Fixed
+
+- **Space-only names bug**: Added schema-level validation to reject product titles, product descriptions, and category names that contain only whitespace characters
+  - Previously: Space-only strings were accepted, stored as empty strings, and became unsearchable
+  - Now: Pydantic validators reject space-only input with `ValidationError` (HTTP 422)
+  - Automatic stripping of valid inputs: leading/trailing spaces are removed before storage
+  - Applied consistently to both create and update operations
+
+### Changed
+
+- Moved whitespace validation from API endpoint layer to Pydantic schema layer
+  - More robust and consistent validation
+  - Validation happens before business logic execution
+  - Easier to maintain and test
+
+### Security Considerations
+
+- Database: Uses parameterized queries via SQLAlchemy ORM (SQL injection protection)
+- Input validation: All user inputs validated via Pydantic before processing
+- CORS: Not currently enabled (configure in fastapi.middleware.cors if needed)
+- Rate limiting: Not yet implemented (recommended for production)
+
+### Version Information
+
+**Semantic Version**: 0.1.0
+- Major: 0 (initial development phase)
+- Minor: 1 (includes functional features)
+- Patch: 0 (no bug fixes in this version, only features and bug fix for space-only names)
+
+This is an early development release. The public API may change in subsequent releases.
+
+---
+
+## Version History Reference
+
+| Version | Release Date | Status | Notes |
+|---------|------------|--------|-------|
+| [0.1.0](#010---2024-03-19) | 2024-03-19 | Current | Initial release with core functionality |
+| [Unreleased](#unreleased) | - | In Progress | Upcoming features and improvements |
+
+---
+
+## Guidelines for Maintainers
+
+### When to Update Versions
+
+- **PATCH version** (0.1.X): Bug fixes, performance improvements, non-breaking changes
+  - Example: Fixing the space-only names bug (0.1.0 → 0.1.1)
+- **MINOR version** (0.X.0): New features, backward-compatible additions
+  - Example: Adding new search filters (0.1.0 → 0.2.0)
+- **MAJOR version** (X.0.0): Breaking API changes, major restructuring
+  - Example: Changing endpoint paths (0.1.0 → 1.0.0)
+
+### Updating Version References
+
+When releasing a new version, update all occurrences:
+
+1. `pyproject.toml`: `version = "X.Y.Z"`
+2. `app/main.py`: `version="X.Y.Z"`
+3. `app/observability/metrics.py`: `version="X.Y.Z"`
+4. `app/observability/setup.py`: `"service.version": "X.Y.Z"`
+5. `Dockerfile`: Update image tags in build commands
+6. `CHANGELOG.md`: Add new version section with changes
+
+### Changelog Format
+
+For each release:
+
+1. Create section with `## [X.Y.Z] - YYYY-MM-DD`
+2. Use subsections: Added, Changed, Fixed, Deprecated, Removed, Security
+3. List items as bullet points
+4. Include reference links at bottom for easy diff generation
+5. Keep unreleased section for tracking in-progress work
+
+### Release Checklist
+
+- [ ] All tests pass: `pytest -v`
+- [ ] Code formatted and linted
+- [ ] Version numbers updated in all files (see list above)
+- [ ] CHANGELOG.md updated with new version section
+- [ ] Git tag created: `git tag v0.1.0`
+- [ ] Release notes added to GitHub
+
+---
+
+## How to Contribute
+
+See [README.md](README.md) for development setup and contribution guidelines.
+
+For detailed agent-specific guidance, see [AGENTS.md](AGENTS.md).
