@@ -56,7 +56,7 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
                 detail=f"Category depth cannot exceed {MAX_CATEGORY_DEPTH}",
             )
 
-    category = Category(name=payload.name.strip(), parent_id=payload.parent_id)
+    category = Category(name=payload.name, parent_id=payload.parent_id)
     session.add(category)
     try:
         await session.commit()
@@ -65,7 +65,7 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
         category_mutations_total.add(1, {"operation": "create", "result": "conflict"})
         logger.warning(
             "category_create_conflict",
-            extra={"category_name": payload.name.strip(), "parent_id": payload.parent_id},
+            extra={"category_name": payload.name, "parent_id": payload.parent_id},
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
     await session.refresh(category)
@@ -97,7 +97,7 @@ async def list_categories(
     session: AsyncSession = Depends(get_session),
 ) -> CategoryListResponse:
     """List categories."""
-    records = await timed_execute_scalars_all(session, select(Category).limit(limit).offset(offset))
+    records = await timed_execute_scalars_all(session, select(Category).order_by(Category.id).limit(limit).offset(offset))
     if offset == 0 and len(records) < limit:
         total = len(records)
     else:
@@ -152,7 +152,7 @@ async def update_category(
         category.parent_id = new_parent_id
 
     if "name" in updates and updates["name"] is not None:
-        category.name = updates["name"].strip()
+        category.name = updates["name"]
 
     try:
         await session.commit()
