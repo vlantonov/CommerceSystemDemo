@@ -22,6 +22,24 @@ class ProductBase(BaseModel):
     def serialize_image_url(self, value: AnyHttpUrl | None) -> str | None:
         return str(value) if value is not None else None
 
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        if isinstance(value, str):
+            value = value.strip()
+            if value == "":
+                raise ValueError("Title cannot be empty or contain only whitespace")
+        return value
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        if isinstance(value, str):
+            value = value.strip()
+            if value == "":
+                raise ValueError("Description cannot be empty or contain only whitespace")
+        return value
+
     @field_validator("sku", mode="before")
     @classmethod
     def normalize_sku(cls, value: str) -> str:
@@ -43,6 +61,24 @@ class ProductUpdate(BaseModel):
     sku: str | None = Field(default=None, min_length=1, max_length=100, pattern=SKU_REGEX)
     price: Decimal | None = Field(default=None, ge=Decimal("0"))
     category_id: int | None = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_optional_title(cls, value: str | None) -> str | None:
+        if isinstance(value, str):
+            value = value.strip()
+            if value == "":
+                raise ValueError("Title cannot be empty or contain only whitespace")
+        return value
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def validate_optional_description(cls, value: str | None) -> str | None:
+        if isinstance(value, str):
+            value = value.strip()
+            if value == "":
+                raise ValueError("Description cannot be empty or contain only whitespace")
+        return value
 
     @field_validator("sku", mode="before")
     @classmethod

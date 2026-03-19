@@ -665,3 +665,135 @@ async def test_search_invalid_price_range(client: AsyncClient):
     """Test that invalid price range (min > max) is rejected."""
     response = await client.get("/api/v1/products/search?min_price=1000&max_price=100")
     assert response.status_code == 422  # Validation error
+
+
+# ============================================================================
+# Whitespace Validation Tests
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_create_category_with_space_only_name_fails(client: AsyncClient):
+    """Test that creating a category with space-only name is rejected."""
+    response = await client.post(
+        "/api/v1/categories",
+        json={"name": "   "}
+    )
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_create_category_with_leading_trailing_spaces_stripped(client: AsyncClient):
+    """Test that category names have leading/trailing spaces stripped."""
+    response = await client.post(
+        "/api/v1/categories",
+        json={"name": "  Electronics  "}
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "Electronics"
+
+
+@pytest.mark.asyncio
+async def test_update_category_with_space_only_name_fails(client: AsyncClient):
+    """Test that updating a category with space-only name is rejected."""
+    create_response = await client.post(
+        "/api/v1/categories",
+        json={"name": "Original Name"}
+    )
+    category_id = create_response.json()["id"]
+    
+    response = await client.patch(
+        f"/api/v1/categories/{category_id}",
+        json={"name": "   "}
+    )
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_create_product_with_space_only_title_fails(client: AsyncClient):
+    """Test that creating a product with space-only title is rejected."""
+    response = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "   ",
+            "description": "Test description",
+            "sku": "TEST-001",
+            "price": "100.00"
+        }
+    )
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_create_product_with_space_only_description_fails(client: AsyncClient):
+    """Test that creating a product with space-only description is rejected."""
+    response = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Test Product",
+            "description": "   ",
+            "sku": "TEST-001",
+            "price": "100.00"
+        }
+    )
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_create_product_with_leading_trailing_spaces_stripped(client: AsyncClient):
+    """Test that product title and description have leading/trailing spaces stripped."""
+    response = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "  Test Product  ",
+            "description": "  Test description  ",
+            "sku": "TEST-001",
+            "price": "100.00"
+        }
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Test Product"
+    assert data["description"] == "Test description"
+
+
+@pytest.mark.asyncio
+async def test_update_product_with_space_only_title_fails(client: AsyncClient):
+    """Test that updating a product with space-only title is rejected."""
+    create_response = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Original Title",
+            "description": "Test description",
+            "sku": "TEST-001",
+            "price": "100.00"
+        }
+    )
+    product_id = create_response.json()["id"]
+    
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"title": "   "}
+    )
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_update_product_with_space_only_description_fails(client: AsyncClient):
+    """Test that updating a product with space-only description is rejected."""
+    create_response = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Original Title",
+            "description": "Original description",
+            "sku": "TEST-001",
+            "price": "100.00"
+        }
+    )
+    product_id = create_response.json()["id"]
+    
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"description": "   "}
+    )
+    assert response.status_code == 422  # Validation error
