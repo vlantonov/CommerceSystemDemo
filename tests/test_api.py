@@ -35,10 +35,40 @@ async def client(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_health_endpoint(client: AsyncClient):
-    """Test the health check endpoint."""
+    """Test the health check endpoint returns ok with database available."""
     response = await client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["database"] == "available"
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
+    """Test the health check endpoint reports error when database is unreachable."""
+    from unittest.mock import AsyncMock, patch
+
+    app = create_app()
+
+    async def override_get_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    mock_engine = AsyncMock()
+    mock_engine.connect = AsyncMock(side_effect=Exception("connection refused"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        with patch("app.db.session.get_engine", return_value=mock_engine):
+            response = await ac.get("/health")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["database"] == "unavailable"
 
 
 @pytest.mark.asyncio

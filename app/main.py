@@ -116,7 +116,18 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        from sqlalchemy import text
+
+        from app.db.session import get_engine
+
+        engine = get_engine()
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        except Exception:
+            logger.exception("health_check_database_failure")
+            return {"status": "error", "database": "unavailable"}
+        return {"status": "ok", "database": "available"}
 
     return app
 
