@@ -6,7 +6,7 @@ Guide for AI coding agents working on the Commerce System Demo project.
 
 Commerce System Demo is a FastAPI-based commerce service that provides RESTful APIs for managing products, categories, and implementing search functionality. The project includes built-in observability with OpenTelemetry metrics, logging, and distributed tracing.
 
-**Current Version**: 0.1.1 (following [Semantic Versioning](https://semver.org/))
+**Current Version**: 0.1.2 (following [Semantic Versioning](https://semver.org/))
 
 ## Setup Commands
 
@@ -101,7 +101,7 @@ app/
 
 ### Docker
 
-- **Build image**: `docker build -t commerce-system-demo:0.1.1 .`
+- **Build image**: `docker build -t commerce-system-demo:0.1.2 .`
 - **View Dockerfile**: Includes Python dependencies, migration scripts, and app code
 - **Build context**: Includes `scripts/`, `app/`, and `observability/` directories
 
@@ -184,7 +184,7 @@ This project follows [Semantic Versioning 2.0.0](https://semver.org/):
 - **MINOR**: Backward-compatible new features
 - **PATCH**: Backward-compatible bug fixes
 
-Current version is **0.1.1** (initial development). Version is defined in:
+Current version is **0.1.2** (initial development). Version is defined in:
 - `pyproject.toml` (project metadata)
 - `app/main.py` (FastAPI version)
 - `app/observability/metrics.py` (meter version)

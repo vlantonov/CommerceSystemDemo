@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Advanced filtering options for product search
 - Product images storage optimization
 
+## [0.1.2] - 2026-03-20
+
+### Added
+
+- Unit tests for API handler branches covering success paths and edge cases (test_api_unit.py)
+- Service-level tests for category depth limit and cycle detection logic (test_category_service.py)
+- Unit tests for observability middleware and metrics emission paths (test_observability.py)
+- Concurrent access integration tests for race conditions on SKU and category constraints (test_concurrency.py)
+
 ## [0.1.1] - 2026-03-19
 
 ### Fixed
