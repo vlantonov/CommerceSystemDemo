@@ -100,3 +100,15 @@ category_validation_failures_total: Counter = _meter.create_counter(
     unit="1",
     description="Total number of category validation failures",
 )
+
+health_check_total: Counter = _meter.create_counter(
+    name="commerce_health_check_total",
+    unit="1",
+    description="Total number of health check requests",
+)
+
+health_check_duration_seconds: Histogram = _meter.create_histogram(
+    name="commerce_health_check_duration_seconds",
+    unit="s",
+    description="Duration of health check requests including database probe",
+)

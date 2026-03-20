@@ -116,18 +116,47 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:
+        import asyncio
+        import time
+
         from sqlalchemy import text
 
         from app.db.session import get_engine
+        from app.observability.metrics import health_check_duration_seconds, health_check_total
 
+        settings = get_settings()
+        retries = settings.health_check_db_retries
+        timeout = settings.health_check_db_timeout
         engine = get_engine()
-        try:
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-        except Exception:
-            logger.exception("health_check_database_failure")
-            return {"status": "error", "database": "unavailable"}
-        return {"status": "ok", "database": "available"}
+        start = time.monotonic()
+        last_error: Exception | None = None
+
+        for attempt in range(1, retries + 1):
+            try:
+                async with asyncio.timeout(timeout):
+                    async with engine.connect() as conn:
+                        await conn.execute(text("SELECT 1"))
+                duration = time.monotonic() - start
+                health_check_total.add(1, {"status": "ok"})
+                health_check_duration_seconds.record(duration, {"status": "ok"})
+                return {"status": "ok", "database": "available"}
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "health_check_db_attempt_failed",
+                    extra={"attempt": attempt, "max_retries": retries, "error": str(exc)},
+                )
+                if attempt < retries:
+                    await asyncio.sleep(0.1 * attempt)
+
+        duration = time.monotonic() - start
+        health_check_total.add(1, {"status": "error"})
+        health_check_duration_seconds.record(duration, {"status": "error"})
+        logger.error(
+            "health_check_database_failure",
+            extra={"retries_exhausted": retries, "error": str(last_error)},
+        )
+        return {"status": "error", "database": "unavailable"}
 
     return app
 
