@@ -63,3 +63,18 @@ groups:
         annotations:
           summary: "Database pool pressure"
           description: "DB pool in-use connections are above 12 for at least 10 minutes."
+
+      - alert: CommerceHealthCheckFailures
+        expr: |
+          (
+            sum(rate(commerce_health_check_total{status="error"}[5m]))
+            /
+            clamp_min(sum(rate(commerce_health_check_total[5m])), 0.001)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          priority: p1
+        annotations:
+          summary: "Health check database failures"
+          description: "More than 50% of health checks are failing for at least 5 minutes."
