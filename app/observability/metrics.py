@@ -3,7 +3,7 @@
 from opentelemetry import metrics
 from opentelemetry.metrics import Counter, Histogram, UpDownCounter
 
-_meter = metrics.get_meter("commerce-system-demo-observability", version="0.1.2")
+_meter = metrics.get_meter("commerce-system-demo-observability", version="0.1.3")
 
 http_request_duration_seconds: Histogram = _meter.create_histogram(
     name="commerce_http_request_duration_seconds",
@@ -99,4 +99,16 @@ category_validation_failures_total: Counter = _meter.create_counter(
     name="commerce_category_validation_failures_total",
     unit="1",
     description="Total number of category validation failures",
+)
+
+health_check_total: Counter = _meter.create_counter(
+    name="commerce_health_check_total",
+    unit="1",
+    description="Total number of health check requests",
+)
+
+health_check_duration_seconds: Histogram = _meter.create_histogram(
+    name="commerce_health_check_duration_seconds",
+    unit="s",
+    description="Duration of health check requests including database probe",
 )

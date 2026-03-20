@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     otel_metrics_path: str = "/metrics"
     otel_trace_excluded_urls: str = ""
     log_level: str = "INFO"
+    health_check_db_retries: int = 3
+    health_check_db_timeout: float = 2.0
 
 
 @lru_cache

@@ -166,6 +166,56 @@
           "legendFormat": "{{le}}"
         }
       ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Health Check Rate by Status (req/s)",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_health_check_total[5m])) by (status)",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Health Check Failure Ratio (%)",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "percentunit", "min": 0, "max": 1},
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(commerce_health_check_total{status=\"error\"}[5m])) / sum(rate(commerce_health_check_total[5m]))",
+          "legendFormat": "failure ratio"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "P95 Health Check Duration (ms)",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "ms"},
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(commerce_health_check_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "p95"
+        }
+      ]
     }
   ]
 }

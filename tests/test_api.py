@@ -35,10 +35,148 @@ async def client(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_health_endpoint(client: AsyncClient):
-    """Test the health check endpoint."""
+    """Test the health check endpoint returns ok with database available."""
     response = await client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["database"] == "available"
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
+    """Test the health check reports error after all retries are exhausted."""
+    from unittest.mock import AsyncMock, patch
+
+    app = create_app()
+
+    async def override_get_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    mock_engine = AsyncMock()
+    mock_engine.connect = AsyncMock(side_effect=Exception("connection refused"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        with patch("app.db.session.get_engine", return_value=mock_engine):
+            response = await ac.get("/health")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["database"] == "unavailable"
+    # Default retries is 3 — engine.connect should be called 3 times
+    assert mock_engine.connect.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_database_recovers_on_retry(db_session: AsyncSession):
+    """Test that health check succeeds when DB fails first then recovers."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    app = create_app()
+
+    async def override_get_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    # First call fails, second call succeeds
+    mock_conn = AsyncMock()
+    mock_conn.execute = AsyncMock(return_value=None)
+    mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_conn.__aexit__ = AsyncMock(return_value=False)
+
+    mock_engine = AsyncMock()
+    mock_engine.connect = MagicMock(
+        side_effect=[Exception("transient error"), MagicMock(
+            __aenter__=AsyncMock(return_value=mock_conn),
+            __aexit__=AsyncMock(return_value=False),
+        )]
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        with patch("app.db.session.get_engine", return_value=mock_engine):
+            response = await ac.get("/health")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["database"] == "available"
+    assert mock_engine.connect.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_metrics_recorded_on_success(db_session: AsyncSession):
+    """Test that health check metrics are recorded on successful check."""
+    from unittest.mock import MagicMock, patch
+
+    app = create_app()
+
+    async def override_get_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    mock_counter = MagicMock()
+    mock_histogram = MagicMock()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        with patch("app.observability.metrics.health_check_total", mock_counter), \
+             patch("app.observability.metrics.health_check_duration_seconds", mock_histogram):
+            response = await ac.get("/health")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    mock_counter.add.assert_called_once_with(1, {"status": "ok"})
+    mock_histogram.record.assert_called_once()
+    record_args = mock_histogram.record.call_args
+    assert record_args[0][1] == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_metrics_recorded_on_failure(db_session: AsyncSession):
+    """Test that health check metrics are recorded on DB failure."""
+    from unittest.mock import AsyncMock, MagicMock, call, patch
+
+    app = create_app()
+
+    async def override_get_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_get_session
+
+    mock_engine = AsyncMock()
+    mock_engine.connect = AsyncMock(side_effect=Exception("connection refused"))
+
+    mock_counter = MagicMock()
+    mock_histogram = MagicMock()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        with patch("app.db.session.get_engine", return_value=mock_engine), \
+             patch("app.observability.metrics.health_check_total", mock_counter), \
+             patch("app.observability.metrics.health_check_duration_seconds", mock_histogram):
+            response = await ac.get("/health")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json()["status"] == "error"
+    mock_counter.add.assert_called_once_with(1, {"status": "error"})
+    mock_histogram.record.assert_called_once()
+    record_args = mock_histogram.record.call_args
+    assert record_args[1] == {"status": "error"} or record_args[0][1] == {"status": "error"}
 
 
 @pytest.mark.asyncio

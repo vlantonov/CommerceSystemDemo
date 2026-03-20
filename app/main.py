@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import TemplateNotFound
 
@@ -77,7 +77,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Commerce System Demo",
-        version="0.1.2",
+        version="0.1.3",
         lifespan=lifespan,
     )
     app.router.route_class = ObservabilityRoute
@@ -116,7 +116,50 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        import asyncio
+        import time
+
+        from sqlalchemy import text
+
+        from app.db.session import get_engine
+        from app.observability.metrics import health_check_duration_seconds, health_check_total
+
+        settings = get_settings()
+        retries = settings.health_check_db_retries
+        timeout = settings.health_check_db_timeout
+        engine = get_engine()
+        start = time.monotonic()
+        last_error: Exception | None = None
+
+        for attempt in range(1, retries + 1):
+            try:
+                async with asyncio.timeout(timeout):
+                    async with engine.connect() as conn:
+                        await conn.execute(text("SELECT 1"))
+                duration = time.monotonic() - start
+                health_check_total.add(1, {"status": "ok"})
+                health_check_duration_seconds.record(duration, {"status": "ok"})
+                return {"status": "ok", "database": "available"}
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "health_check_db_attempt_failed",
+                    extra={"attempt": attempt, "max_retries": retries, "error": str(exc)},
+                )
+                if attempt < retries:
+                    await asyncio.sleep(0.1 * attempt)
+
+        duration = time.monotonic() - start
+        health_check_total.add(1, {"status": "error"})
+        health_check_duration_seconds.record(duration, {"status": "error"})
+        logger.error(
+            "health_check_database_failure",
+            extra={"retries_exhausted": retries, "error": str(last_error)},
+        )
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "database": "unavailable"},
+        )
 
     return app
 
