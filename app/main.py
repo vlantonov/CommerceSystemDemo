@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import TemplateNotFound
 
@@ -156,7 +156,10 @@ def create_app() -> FastAPI:
             "health_check_database_failure",
             extra={"retries_exhausted": retries, "error": str(last_error)},
         )
-        return {"status": "error", "database": "unavailable"}
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "database": "unavailable"},
+        )
 
     return app
 

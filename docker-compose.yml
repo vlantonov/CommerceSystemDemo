@@ -52,6 +52,12 @@ services:
       OTEL_TRACE_EXCLUDED_URLS: /metrics,/health
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     depends_on:
       db:
         condition: service_healthy
@@ -112,7 +118,8 @@ services:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./observability/prometheus-alerts:/etc/prometheus/alerts:ro
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     ports:
       - "9090:9090"
 

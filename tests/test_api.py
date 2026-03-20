@@ -65,7 +65,7 @@ async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
 
     app.dependency_overrides.clear()
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     data = response.json()
     assert data["status"] == "error"
     assert data["database"] == "unavailable"
@@ -171,7 +171,7 @@ async def test_health_endpoint_metrics_recorded_on_failure(db_session: AsyncSess
 
     app.dependency_overrides.clear()
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     assert response.json()["status"] == "error"
     mock_counter.add.assert_called_once_with(1, {"status": "error"})
     mock_histogram.record.assert_called_once()
