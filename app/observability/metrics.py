@@ -3,7 +3,7 @@
 from opentelemetry import metrics
 from opentelemetry.metrics import Counter, Histogram, UpDownCounter
 
-_meter = metrics.get_meter("commerce-system-demo-observability", version="0.1.2")
+_meter = metrics.get_meter("commerce-system-demo-observability", version="0.1.3")
 
 http_request_duration_seconds: Histogram = _meter.create_histogram(
     name="commerce_http_request_duration_seconds",

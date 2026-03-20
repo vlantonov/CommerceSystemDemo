@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Advanced filtering options for product search
 - Product images storage optimization
 
+## [0.1.3] - 2026-03-20
+
+### Added
+
+- Health check endpoint now verifies database connectivity via `SELECT 1` probe
+- Retry fallback policy for health check database connection with configurable retries and timeout
+- New settings `health_check_db_retries` (default 3) and `health_check_db_timeout` (default 2.0s)
+- OpenTelemetry metrics for health checks: `commerce_health_check_total` counter and `commerce_health_check_duration_seconds` histogram
+- Integration tests for health check success, DB failure with retries, recovery on retry, and metrics recording
+
 ## [0.1.2] - 2026-03-20
 
 ### Added
