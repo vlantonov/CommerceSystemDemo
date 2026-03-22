@@ -496,11 +496,22 @@ python3 -m venv .venv
 pip install -e '.[dev]'
 ```
 
-3. Copy environment config and adjust DB credentials if needed:
+3. Copy environment config and adjust as needed:
 
 ```bash
 cp .env.example .env
 ```
+
+The `.env` file is **not** committed to the repository (it is listed in `.gitignore`). The provided `.env.example` contains sensible defaults for local development. Key variables you may want to review:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/commerce_demo` | PostgreSQL connection string. Change host/port/credentials to match your local setup, or leave as-is when using Docker Compose (it provisions the DB automatically). |
+| `TELEMETRY_ENABLED` | `true` | Set to `false` if you are not running the observability stack. |
+| `API_PREFIX` | `/api/v1` | URL prefix for all API routes. |
+| `AUTO_CREATE_SCHEMA` | `true` | Creates tables on startup when no Alembic migration has been run yet. |
+
+> **Tip:** When using **Docker Compose** (Option A below), the compose file passes its own `DATABASE_URL` pointing at the containerized PostgreSQL, so the value in `.env` is only used if you run the dev server directly on the host (Option C).
 
 ### 8.2. Development Server
 
