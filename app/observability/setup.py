@@ -76,7 +76,7 @@ def _build_resource(settings: Settings) -> Resource:
     """Build OpenTelemetry resource attributes from runtime settings."""
     attributes = {
         "service.name": settings.otel_service_name,
-        "service.version": "0.1.4",
+        "service.version": "0.1.5",
         "deployment.environment": settings.otel_environment,
     }
 

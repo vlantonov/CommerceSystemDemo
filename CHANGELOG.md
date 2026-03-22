@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Advanced filtering options for product search
 - Product images storage optimization
 
+## [0.1.5] - 2026-03-22
+
+### Fixed
+
+- Category reparent validation now checks combined parent depth plus subtree height against `MAX_CATEGORY_DEPTH`, preventing moves that would exceed the depth limit
+
+### Added
+
+- `_descendant_chain_cte` recursive CTE for computing subtree height of a category
+- `category_subtree_height` service function used during reparent validation
+- Unit tests for combined-depth rejection and acceptance on category reparent
+
 ## [0.1.4] - 2026-03-22
 
 ### Changed
