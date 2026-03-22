@@ -935,3 +935,82 @@ async def test_update_product_with_space_only_description_fails(client: AsyncCli
         json={"description": "   "}
     )
     assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_update_product_set_category_to_null(client: AsyncClient):
+    """Test that explicitly sending category_id=null clears the category link."""
+    cat_resp = await client.post("/api/v1/categories", json={"name": "Temp Cat"})
+    category_id = cat_resp.json()["id"]
+
+    create_resp = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Linked Product",
+            "description": "Has category",
+            "sku": "NULLCAT-001",
+            "price": "50.00",
+            "category_id": category_id,
+        },
+    )
+    product_id = create_resp.json()["id"]
+    assert create_resp.json()["category_id"] == category_id
+
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"category_id": None},
+    )
+    assert response.status_code == 200
+    assert response.json()["category_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_product_set_image_url_to_null(client: AsyncClient):
+    """Test that explicitly sending image_url=null clears the image."""
+    create_resp = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "With Image",
+            "description": "Has image",
+            "sku": "NULLIMG-001",
+            "price": "75.00",
+            "image_url": "https://example.com/img.png",
+        },
+    )
+    product_id = create_resp.json()["id"]
+    assert create_resp.json()["image_url"] is not None
+
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"image_url": None},
+    )
+    assert response.status_code == 200
+    assert response.json()["image_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_product_omitted_fields_unchanged(client: AsyncClient):
+    """Test that omitting fields from PATCH leaves them unchanged."""
+    create_resp = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Original",
+            "description": "Keep this",
+            "sku": "OMIT-001",
+            "price": "99.00",
+            "image_url": "https://example.com/keep.png",
+        },
+    )
+    product_id = create_resp.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"title": "Changed Only Title"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Changed Only Title"
+    assert data["description"] == "Keep this"
+    assert data["sku"] == "OMIT-001"
+    assert data["price"] == "99.00"
+    assert data["image_url"] == "https://example.com/keep.png"
