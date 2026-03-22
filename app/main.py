@@ -77,7 +77,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Commerce System Demo",
-        version="0.1.3",
+        version="0.1.4",
         lifespan=lifespan,
     )
     app.router.route_class = ObservabilityRoute

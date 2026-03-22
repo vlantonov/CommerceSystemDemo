@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Advanced filtering options for product search
 - Product images storage optimization
 
+## [0.1.4] - 2026-03-22
+
+### Changed
+
+- Replaced O(n) per-level ancestor walks in `category_depth` and `validate_no_cycles` with single recursive CTE queries
+- Category depth validation now executes one SQL statement instead of up to 100 sequential fetches
+- Cycle detection now uses a single `EXISTS` query over a recursive ancestor CTE
+
+### Added
+
+- Integration benchmark test for category validation on PostgreSQL testcontainers (`test_category_service_benchmark.py`)
+- Opt-in `performance` pytest marker to separate benchmarks from the default fast test suite
+- Dedicated `performance-tests` CI job triggered via `workflow_dispatch` with `run_performance=true`
+- Documentation in README and AGENTS.md for running performance benchmarks locally and in CI
+
 ## [0.1.3] - 2026-03-20
 
 ### Added
