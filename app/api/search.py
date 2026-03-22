@@ -4,8 +4,11 @@ from decimal import Decimal
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
+from app.core.config import get_settings
 from app.db.session import get_session
 from app.observability.metrics import search_requests_total, search_result_count, search_zero_results_total
 from app.observability.route import ObservabilityRoute
@@ -14,9 +17,11 @@ from app.services.product_service import search_products
 
 router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.search")
+_limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/search", response_model=ProductSearchResponse)
+@_limiter.limit(lambda: get_settings().rate_limit_search)
 async def search_products_endpoint(
     request: Request,
     q: str | None = Query(default=None, min_length=1, max_length=255),

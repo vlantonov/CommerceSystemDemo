@@ -46,6 +46,24 @@ async def timed_execute_scalars_all(session: AsyncSession, statement: Any):
     return result
 
 
+async def timed_execute_all(session: AsyncSession, statement: Any):
+    """Execute a query and return all rows (as tuples) with timing telemetry."""
+    await _record_connection_acquire(session)
+    execute_fetch_start = perf_counter()
+    result = (await session.execute(statement)).all()
+    _record_execute_fetch((perf_counter() - execute_fetch_start) * 1000)
+    return result
+
+
+async def timed_execute_one(session: AsyncSession, statement: Any):
+    """Execute a query and return one row with timing telemetry."""
+    await _record_connection_acquire(session)
+    execute_fetch_start = perf_counter()
+    result = (await session.execute(statement)).one()
+    _record_execute_fetch((perf_counter() - execute_fetch_start) * 1000)
+    return result
+
+
 async def timed_execute_scalar_one(session: AsyncSession, statement: Any):
     """Execute a query and return one scalar result with timing telemetry."""
     await _record_connection_acquire(session)

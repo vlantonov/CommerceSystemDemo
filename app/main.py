@@ -9,10 +9,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import TemplateNotFound
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.api import api_router
 from app.core.config import get_settings
-from app.db.session import create_schema, get_engine, initialize_database
+from app.db.session import create_schema, get_engine, get_session_factory, initialize_database
 from app.observability import (
     ObservabilityRoute,
     initialize_app_observability,
@@ -53,16 +56,21 @@ templates = Jinja2Templates(directory=_resolve_template_directories())
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application startup and shutdown tasks."""
     start_log_listener()
     settings = get_settings()
     initialize_database(settings.database_url)
-    initialize_database_observability(get_engine(), settings)
+
+    engine = get_engine()
+    app.state.engine = engine
+    app.state.session_factory = get_session_factory()
+
+    initialize_database_observability(engine, settings)
     logger.info("application_startup", extra={"database_initialized": True})
 
     if settings.auto_create_schema:
-        await create_schema()
+        await create_schema(engine)
         logger.info("database_schema_created")
 
     yield
@@ -75,11 +83,18 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
 
+    limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=[settings.rate_limit_default],
+    )
+
     app = FastAPI(
         title="Commerce System Demo",
-        version="0.1.5",
+        version="0.2.0",
         lifespan=lifespan,
     )
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.router.route_class = ObservabilityRoute
     initialize_app_observability(app, settings)
     app.include_router(api_router, prefix=settings.api_prefix)
@@ -115,19 +130,18 @@ def create_app() -> FastAPI:
             )
 
     @app.get("/health", tags=["health"])
-    async def health() -> dict[str, str]:
+    async def health(request: Request) -> dict[str, str]:
         import asyncio
         import time
 
         from sqlalchemy import text
 
-        from app.db.session import get_engine
         from app.observability.metrics import health_check_duration_seconds, health_check_total
 
         settings = get_settings()
         retries = settings.health_check_db_retries
         timeout = settings.health_check_db_timeout
-        engine = get_engine()
+        engine = request.app.state.engine
         start = time.monotonic()
         last_error: Exception | None = None
 

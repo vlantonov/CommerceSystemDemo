@@ -13,13 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import main as app_main
 from app.main import create_app
-from app.db.session import get_session
+from app.db.session import get_engine, get_session, get_session_factory
 
 
 @pytest.fixture
 async def client(db_session: AsyncSession):
     """Create an AsyncClient with mocked dependency injection."""
     app = create_app()
+
+    # httpx ASGITransport does not trigger ASGI lifespan, so populate
+    # app.state with the engine / factory that conftest already initialised.
+    app.state.engine = get_engine()
+    app.state.session_factory = get_session_factory()
     
     async def override_get_session():
         yield db_session
@@ -46,7 +51,7 @@ async def test_health_endpoint(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
     """Test the health check reports error after all retries are exhausted."""
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock
 
     app = create_app()
 
@@ -60,8 +65,8 @@ async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        with patch("app.db.session.get_engine", return_value=mock_engine):
-            response = await ac.get("/health")
+        app.state.engine = mock_engine
+        response = await ac.get("/health")
 
     app.dependency_overrides.clear()
 
@@ -76,7 +81,7 @@ async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_health_endpoint_database_recovers_on_retry(db_session: AsyncSession):
     """Test that health check succeeds when DB fails first then recovers."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    from unittest.mock import AsyncMock, MagicMock
 
     app = create_app()
 
@@ -101,8 +106,8 @@ async def test_health_endpoint_database_recovers_on_retry(db_session: AsyncSessi
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        with patch("app.db.session.get_engine", return_value=mock_engine):
-            response = await ac.get("/health")
+        app.state.engine = mock_engine
+        response = await ac.get("/health")
 
     app.dependency_overrides.clear()
 
@@ -124,6 +129,8 @@ async def test_health_endpoint_metrics_recorded_on_success(db_session: AsyncSess
         yield db_session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.state.engine = get_engine()
+    app.state.session_factory = get_session_factory()
 
     mock_counter = MagicMock()
     mock_histogram = MagicMock()
@@ -147,7 +154,7 @@ async def test_health_endpoint_metrics_recorded_on_success(db_session: AsyncSess
 @pytest.mark.asyncio
 async def test_health_endpoint_metrics_recorded_on_failure(db_session: AsyncSession):
     """Test that health check metrics are recorded on DB failure."""
-    from unittest.mock import AsyncMock, MagicMock, call, patch
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     app = create_app()
 
@@ -164,8 +171,8 @@ async def test_health_endpoint_metrics_recorded_on_failure(db_session: AsyncSess
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        with patch("app.db.session.get_engine", return_value=mock_engine), \
-             patch("app.observability.metrics.health_check_total", mock_counter), \
+        app.state.engine = mock_engine
+        with patch("app.observability.metrics.health_check_total", mock_counter), \
              patch("app.observability.metrics.health_check_duration_seconds", mock_histogram):
             response = await ac.get("/health")
 
@@ -935,3 +942,260 @@ async def test_update_product_with_space_only_description_fails(client: AsyncCli
         json={"description": "   "}
     )
     assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_update_product_set_category_to_null(client: AsyncClient):
+    """Test that explicitly sending category_id=null clears the category link."""
+    cat_resp = await client.post("/api/v1/categories", json={"name": "Temp Cat"})
+    category_id = cat_resp.json()["id"]
+
+    create_resp = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Linked Product",
+            "description": "Has category",
+            "sku": "NULLCAT-001",
+            "price": "50.00",
+            "category_id": category_id,
+        },
+    )
+    product_id = create_resp.json()["id"]
+    assert create_resp.json()["category_id"] == category_id
+
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"category_id": None},
+    )
+    assert response.status_code == 200
+    assert response.json()["category_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_product_set_image_url_to_null(client: AsyncClient):
+    """Test that explicitly sending image_url=null clears the image."""
+    create_resp = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "With Image",
+            "description": "Has image",
+            "sku": "NULLIMG-001",
+            "price": "75.00",
+            "image_url": "https://example.com/img.png",
+        },
+    )
+    product_id = create_resp.json()["id"]
+    assert create_resp.json()["image_url"] is not None
+
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"image_url": None},
+    )
+    assert response.status_code == 200
+    assert response.json()["image_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_product_omitted_fields_unchanged(client: AsyncClient):
+    """Test that omitting fields from PATCH leaves them unchanged."""
+    create_resp = await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Original",
+            "description": "Keep this",
+            "sku": "OMIT-001",
+            "price": "99.00",
+            "image_url": "https://example.com/keep.png",
+        },
+    )
+    product_id = create_resp.json()["id"]
+
+    response = await client.patch(
+        f"/api/v1/products/{product_id}",
+        json={"title": "Changed Only Title"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Changed Only Title"
+    assert data["description"] == "Keep this"
+    assert data["sku"] == "OMIT-001"
+    assert data["price"] == "99.00"
+    assert data["image_url"] == "https://example.com/keep.png"
+
+
+# ============================================================================
+# Category Depth Limit Tests
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_create_category_exceeding_depth_limit(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """Test that creating a category chain beyond MAX_CATEGORY_DEPTH is rejected."""
+    from app.services import category_service as cs
+
+    monkeypatch.setattr(cs, "MAX_CATEGORY_DEPTH", 3)
+
+    # Build chain: root → L1 → L2 (depth 3)
+    root = (await client.post("/api/v1/categories", json={"name": "Depth-Root"})).json()
+    l1 = (await client.post("/api/v1/categories", json={"name": "Depth-L1", "parent_id": root["id"]})).json()
+    l2 = (await client.post("/api/v1/categories", json={"name": "Depth-L2", "parent_id": l1["id"]})).json()
+    assert l2["parent_id"] == l1["id"]
+
+    # L3 should be rejected — depth would be 4 > 3
+    response = await client.post(
+        "/api/v1/categories",
+        json={"name": "Depth-L3", "parent_id": l2["id"]},
+    )
+    assert response.status_code == 422
+    assert "depth" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reparent_category_exceeding_depth_limit(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """Test that re-parenting a subtree so combined depth exceeds the limit is rejected."""
+    from app.services import category_service as cs
+
+    monkeypatch.setattr(cs, "MAX_CATEGORY_DEPTH", 4)
+
+    # Chain A: A1 → A2 → A3 (height 3)
+    a1 = (await client.post("/api/v1/categories", json={"name": "ChainA-1"})).json()
+    a2 = (await client.post("/api/v1/categories", json={"name": "ChainA-2", "parent_id": a1["id"]})).json()
+    a3 = (await client.post("/api/v1/categories", json={"name": "ChainA-3", "parent_id": a2["id"]})).json()
+
+    # Chain B: B1 → B2 (depth 2)
+    b1 = (await client.post("/api/v1/categories", json={"name": "ChainB-1"})).json()
+    b2 = (await client.post("/api/v1/categories", json={"name": "ChainB-2", "parent_id": b1["id"]})).json()
+
+    # Try to move A1 under B2 → depth would be 2 + 3 = 5 > 4
+    response = await client.patch(
+        f"/api/v1/categories/{a1['id']}",
+        json={"parent_id": b2["id"]},
+    )
+    assert response.status_code == 422
+    assert "depth" in response.json()["detail"].lower()
+
+
+# ============================================================================
+# Category Cycle Detection Tests
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_reparent_category_creating_cycle_rejected(client: AsyncClient):
+    """Test that re-parenting a parent under its own child is rejected as a cycle."""
+    parent = (await client.post("/api/v1/categories", json={"name": "Cycle-Parent"})).json()
+    child = (await client.post(
+        "/api/v1/categories",
+        json={"name": "Cycle-Child", "parent_id": parent["id"]},
+    )).json()
+
+    # Try to make the parent a child of its own child → cycle
+    response = await client.patch(
+        f"/api/v1/categories/{parent['id']}",
+        json={"parent_id": child["id"]},
+    )
+    assert response.status_code == 422
+    assert "cycle" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reparent_category_creating_deep_cycle_rejected(client: AsyncClient):
+    """Test that a cycle through multiple levels is detected and rejected."""
+    a = (await client.post("/api/v1/categories", json={"name": "CycleDeep-A"})).json()
+    b = (await client.post("/api/v1/categories", json={"name": "CycleDeep-B", "parent_id": a["id"]})).json()
+    c = (await client.post("/api/v1/categories", json={"name": "CycleDeep-C", "parent_id": b["id"]})).json()
+
+    # Try to make A a child of C → A→B→C→A cycle
+    response = await client.patch(
+        f"/api/v1/categories/{a['id']}",
+        json={"parent_id": c["id"]},
+    )
+    assert response.status_code == 422
+    assert "cycle" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reparent_category_self_reference_rejected(client: AsyncClient):
+    """Test that setting a category as its own parent is rejected."""
+    cat = (await client.post("/api/v1/categories", json={"name": "Self-Ref"})).json()
+
+    response = await client.patch(
+        f"/api/v1/categories/{cat['id']}",
+        json={"parent_id": cat["id"]},
+    )
+    assert response.status_code == 422
+    assert "cycle" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reparent_to_nonexistent_parent_rejected(client: AsyncClient):
+    """Test that re-parenting to a nonexistent category returns 404."""
+    cat = (await client.post("/api/v1/categories", json={"name": "Orphan-Move"})).json()
+
+    response = await client.patch(
+        f"/api/v1/categories/{cat['id']}",
+        json={"parent_id": 99999},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_category_with_nonexistent_parent_rejected(client: AsyncClient):
+    """Test that creating a category under a nonexistent parent returns 404."""
+    response = await client.post(
+        "/api/v1/categories",
+        json={"name": "No-Parent", "parent_id": 99999},
+    )
+    assert response.status_code == 404
+
+
+# ============================================================================
+# LIKE Wildcard Injection Tests
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_search_with_percent_wildcard_does_not_match_all(client: AsyncClient):
+    """Test that a search query containing '%' does not act as a LIKE wildcard."""
+    await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Specific Widget",
+            "description": "Only this should NOT match",
+            "sku": "LIKE-SAFE-001",
+            "price": "10.00",
+        },
+    )
+
+    # Searching for literal '%' should not match arbitrary products
+    response = await client.get("/api/v1/products/search?q=%25")
+    assert response.status_code == 200
+    data = response.json()
+    # '%' as a literal character shouldn't match "Specific Widget"
+    for item in data["items"]:
+        assert "%" in item["title"] or "%" in item["sku"]
+
+
+@pytest.mark.asyncio
+async def test_search_with_underscore_wildcard_does_not_match_single_char(client: AsyncClient):
+    """Test that a search query containing '_' does not act as a single-char wildcard."""
+    await client.post(
+        "/api/v1/products",
+        json={
+            "title": "ABC",
+            "description": "Three letter title",
+            "sku": "LIKE-UNDER-001",
+            "price": "10.00",
+        },
+    )
+
+    # '_B_' as LIKE wildcards would match 'ABC', but as literal it should not
+    response = await client.get("/api/v1/products/search?q=_B_")
+    assert response.status_code == 200
+    data = response.json()
+    for item in data["items"]:
+        assert "_B_" in item["title"] or "_B_" in item["sku"].upper()
+
+
+@pytest.mark.asyncio
+async def test_search_with_backslash_is_safe(client: AsyncClient):
+    """Test that a search query containing backslash doesn't cause errors."""
+    response = await client.get("/api/v1/products/search?q=test%5Cvalue")
+    assert response.status_code == 200

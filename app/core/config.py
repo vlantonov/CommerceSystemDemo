@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     health_check_db_retries: int = 3
     health_check_db_timeout: float = 2.0
+    rate_limit_default: str = "60/minute"
+    rate_limit_search: str = "30/minute"
 
 
 @lru_cache

@@ -4,7 +4,7 @@ from sqlalchemy import Select, exists, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.category import Category
-from app.observability.db_timing import timed_execute_scalar_one, timed_get
+from app.observability.db_timing import timed_execute_one, timed_execute_scalar_one, timed_get
 
 MAX_CATEGORY_DEPTH = 100
 
@@ -126,14 +126,17 @@ async def category_subtree_height(session: AsyncSession, category_id: int) -> in
 async def validate_category_parent(session: AsyncSession, parent_id: int) -> None:
     """Validate that a parent category exists and is within depth limits.
 
+    Uses a single ancestor-chain CTE query to check both existence and depth.
+
     Raises:
         CategoryParentNotFoundError: if the parent does not exist.
         CategoryDepthError: if attaching here would exceed MAX_CATEGORY_DEPTH.
     """
-    parent = await get_category_or_none(session, parent_id)
-    if parent is None:
+    ancestor_chain = _ancestor_chain_cte(parent_id, depth_limit=MAX_CATEGORY_DEPTH + 1)
+    stmt = select(func.max(ancestor_chain.c.depth))
+    depth = await timed_execute_scalar_one(session, stmt)
+    if depth is None:
         raise CategoryParentNotFoundError(parent_id)
-    depth = await category_depth(session, parent_id)
     if depth >= MAX_CATEGORY_DEPTH:
         raise CategoryDepthError(MAX_CATEGORY_DEPTH)
 
@@ -143,6 +146,10 @@ async def validate_category_reparent(
 ) -> None:
     """Validate re-parenting a category: parent exists, no cycles, depth within limits.
 
+    Uses a single query combining ancestor-chain and descendant-chain CTEs
+    to check parent existence, cycle detection, and depth limits in one
+    database roundtrip (down from four).
+
     Raises:
         CategoryParentNotFoundError: if the new parent does not exist.
         CategoryCycleError: if the re-parent creates a cycle.
@@ -150,14 +157,23 @@ async def validate_category_reparent(
     """
     if new_parent_id is None:
         return
-    parent = await get_category_or_none(session, new_parent_id)
-    if parent is None:
+
+    ancestor_chain = _ancestor_chain_cte(new_parent_id, depth_limit=MAX_CATEGORY_DEPTH + 1)
+    descendant_chain = _descendant_chain_cte(category_id, depth_limit=MAX_CATEGORY_DEPTH + 1)
+
+    stmt = select(
+        func.max(ancestor_chain.c.depth).label("parent_depth"),
+        exists(
+            select(1).select_from(ancestor_chain).where(ancestor_chain.c.id == category_id)
+        ).label("has_cycle"),
+        func.coalesce(func.max(descendant_chain.c.depth), 1).label("subtree_height"),
+    )
+
+    row = await timed_execute_one(session, stmt)
+
+    if row.parent_depth is None:
         raise CategoryParentNotFoundError(new_parent_id)
-    try:
-        await validate_no_cycles(session, category_id, new_parent_id)
-    except ValueError as exc:
-        raise CategoryCycleError(str(exc)) from exc
-    parent_depth = await category_depth(session, new_parent_id)
-    subtree_height = await category_subtree_height(session, category_id)
-    if parent_depth + subtree_height > MAX_CATEGORY_DEPTH:
+    if row.has_cycle:
+        raise CategoryCycleError("Category cycle detected")
+    if row.parent_depth + row.subtree_height > MAX_CATEGORY_DEPTH:
         raise CategoryDepthError(MAX_CATEGORY_DEPTH)
