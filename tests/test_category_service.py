@@ -11,31 +11,36 @@ from app.services import category_service
 @pytest.mark.asyncio
 async def test_category_depth_stops_when_parent_missing(monkeypatch: pytest.MonkeyPatch):
     session = AsyncMock()
-
-    async def fake_timed_get(_session, _model, category_id):
-        if category_id == 1:
-            return SimpleNamespace(parent_id=2)
-        return None
-
-    monkeypatch.setattr(category_service, "timed_get", fake_timed_get)
+    timed_execute_scalar_one = AsyncMock(return_value=1)
+    monkeypatch.setattr(category_service, "timed_execute_scalar_one", timed_execute_scalar_one)
 
     depth = await category_service.category_depth(session, parent_id=1)
-    assert depth == 2
+    assert depth == 1
+    timed_execute_scalar_one.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_category_depth_returns_zero_for_none_parent(monkeypatch: pytest.MonkeyPatch):
+    session = AsyncMock()
+    timed_execute_scalar_one = AsyncMock()
+    monkeypatch.setattr(category_service, "timed_execute_scalar_one", timed_execute_scalar_one)
+
+    depth = await category_service.category_depth(session, parent_id=None)
+
+    assert depth == 0
+    timed_execute_scalar_one.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_validate_no_cycles_raises_for_cycle(monkeypatch: pytest.MonkeyPatch):
     session = AsyncMock()
-
-    async def fake_timed_get(_session, _model, category_id):
-        if category_id == 2:
-            return SimpleNamespace(parent_id=1)
-        return None
-
-    monkeypatch.setattr(category_service, "timed_get", fake_timed_get)
+    timed_execute_scalar_one = AsyncMock(return_value=1)
+    monkeypatch.setattr(category_service, "timed_execute_scalar_one", timed_execute_scalar_one)
 
     with pytest.raises(ValueError, match="Category cycle detected"):
         await category_service.validate_no_cycles(session, category_id=1, new_parent_id=2)
+
+    timed_execute_scalar_one.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -120,11 +125,11 @@ async def test_validate_category_reparent_raises_depth_error(monkeypatch: pytest
 @pytest.mark.asyncio
 async def test_category_depth_returns_when_exceeding_max(monkeypatch: pytest.MonkeyPatch):
     session = AsyncMock()
-
-    async def fake_timed_get(_session, _model, category_id):
-        return SimpleNamespace(parent_id=category_id + 1)
-
-    monkeypatch.setattr(category_service, "timed_get", fake_timed_get)
+    monkeypatch.setattr(
+        category_service,
+        "timed_execute_scalar_one",
+        AsyncMock(return_value=category_service.MAX_CATEGORY_DEPTH + 1),
+    )
 
     depth = await category_service.category_depth(session, parent_id=1)
     assert depth == category_service.MAX_CATEGORY_DEPTH + 1
@@ -133,6 +138,6 @@ async def test_category_depth_returns_when_exceeding_max(monkeypatch: pytest.Mon
 @pytest.mark.asyncio
 async def test_validate_no_cycles_breaks_on_missing_candidate(monkeypatch: pytest.MonkeyPatch):
     session = AsyncMock()
-    monkeypatch.setattr(category_service, "timed_get", AsyncMock(return_value=None))
+    monkeypatch.setattr(category_service, "timed_execute_scalar_one", AsyncMock(return_value=0))
 
     await category_service.validate_no_cycles(session, category_id=1, new_parent_id=2)

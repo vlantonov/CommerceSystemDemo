@@ -1,10 +1,10 @@
 """Category business logic helpers and hierarchy utilities."""
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, exists, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.category import Category
-from app.observability.db_timing import timed_get
+from app.observability.db_timing import timed_execute_scalar_one, timed_get
 
 MAX_CATEGORY_DEPTH = 100
 
@@ -26,31 +26,58 @@ async def get_category_or_none(session: AsyncSession, category_id: int) -> Categ
     return await timed_get(session, Category, category_id)
 
 
+def _ancestor_chain_cte(start_category_id: int, depth_limit: int | None = None):
+    """Build a recursive CTE that walks from a category to the root by parent links."""
+    ancestor_chain: Select = (
+        select(
+            Category.id.label("id"),
+            Category.parent_id.label("parent_id"),
+            literal(1).label("depth"),
+        )
+        .where(Category.id == start_category_id)
+        .cte(name="ancestor_chain", recursive=True)
+    )
+
+    category_alias = Category.__table__.alias("category_alias")
+    recursive_step = select(
+        category_alias.c.id,
+        category_alias.c.parent_id,
+        (ancestor_chain.c.depth + 1).label("depth"),
+    ).where(category_alias.c.id == ancestor_chain.c.parent_id)
+
+    if depth_limit is not None:
+        recursive_step = recursive_step.where(ancestor_chain.c.depth < depth_limit)
+
+    return ancestor_chain.union_all(recursive_step)
+
+
 async def category_depth(session: AsyncSession, parent_id: int | None) -> int:
     """Compute ancestor depth for a parent candidate in the category tree."""
-    depth = 0
-    current_parent_id = parent_id
-    while current_parent_id is not None:
-        depth += 1
-        if depth > MAX_CATEGORY_DEPTH:
-            return depth
-        parent = await timed_get(session, Category, current_parent_id)
-        if parent is None:
-            break
-        current_parent_id = parent.parent_id
-    return depth
+    if parent_id is None:
+        return 0
+
+    ancestor_chain = _ancestor_chain_cte(parent_id, depth_limit=MAX_CATEGORY_DEPTH + 1)
+    depth_statement = select(func.coalesce(func.max(ancestor_chain.c.depth), 0))
+    depth = await timed_execute_scalar_one(session, depth_statement)
+    return int(depth)
 
 
 async def validate_no_cycles(session: AsyncSession, category_id: int, new_parent_id: int | None) -> None:
     """Ensure re-parenting a category does not create a cycle."""
-    cursor = new_parent_id
-    while cursor is not None:
-        if cursor == category_id:
-            raise ValueError("Category cycle detected")
-        candidate = await timed_get(session, Category, cursor)
-        if candidate is None:
-            break
-        cursor = candidate.parent_id
+    if new_parent_id is None:
+        return
+
+    ancestor_chain = _ancestor_chain_cte(new_parent_id, depth_limit=MAX_CATEGORY_DEPTH + 1)
+    cycle_check_statement = select(
+        exists(
+            select(1)
+            .select_from(ancestor_chain)
+            .where(ancestor_chain.c.id == category_id)
+        )
+    )
+    cycle_detected = await timed_execute_scalar_one(session, cycle_check_statement)
+    if bool(cycle_detected):
+        raise ValueError("Category cycle detected")
 
 
 def category_subtree_cte(root_category_id: int):
