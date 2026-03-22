@@ -1,8 +1,14 @@
 """Product business logic helpers and search orchestration."""
 
+import re
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from time import perf_counter
+
+
+def _escape_like(pattern: str) -> str:
+    """Escape LIKE metacharacters (%, _, \\) so they match literally."""
+    return re.sub(r"([%_\\])", r"\\\1", pattern)
 
 from app.observability.db_timing import timed_execute_scalar_one, timed_execute_scalars_all
 from app.models.product import Product
@@ -28,7 +34,8 @@ async def search_products(
 
     if q:
         normalized = q.upper()
-        query = query.where(or_(Product.title.ilike(f"%{q}%"), Product.sku == normalized))
+        safe_q = _escape_like(q)
+        query = query.where(or_(Product.title.ilike(f"%{safe_q}%"), Product.sku == normalized))
 
     if min_price is not None:
         query = query.where(Product.price >= min_price)
