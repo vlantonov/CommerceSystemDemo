@@ -92,6 +92,37 @@ def category_subtree_cte(root_category_id: int):
     return category_tree
 
 
+def _descendant_chain_cte(start_category_id: int, depth_limit: int | None = None):
+    """Build a recursive CTE that walks from a category down to its deepest descendant."""
+    descendant_chain: Select = (
+        select(
+            Category.id.label("id"),
+            literal(1).label("depth"),
+        )
+        .where(Category.id == start_category_id)
+        .cte(name="descendant_chain", recursive=True)
+    )
+
+    category_alias = Category.__table__.alias("desc_alias")
+    recursive_step = select(
+        category_alias.c.id,
+        (descendant_chain.c.depth + 1).label("depth"),
+    ).where(category_alias.c.parent_id == descendant_chain.c.id)
+
+    if depth_limit is not None:
+        recursive_step = recursive_step.where(descendant_chain.c.depth < depth_limit)
+
+    return descendant_chain.union_all(recursive_step)
+
+
+async def category_subtree_height(session: AsyncSession, category_id: int) -> int:
+    """Compute the height of the subtree rooted at *category_id* (1 = leaf)."""
+    descendant_chain = _descendant_chain_cte(category_id, depth_limit=MAX_CATEGORY_DEPTH + 1)
+    height_statement = select(func.coalesce(func.max(descendant_chain.c.depth), 1))
+    height = await timed_execute_scalar_one(session, height_statement)
+    return int(height)
+
+
 async def validate_category_parent(session: AsyncSession, parent_id: int) -> None:
     """Validate that a parent category exists and is within depth limits.
 
@@ -126,6 +157,7 @@ async def validate_category_reparent(
         await validate_no_cycles(session, category_id, new_parent_id)
     except ValueError as exc:
         raise CategoryCycleError(str(exc)) from exc
-    depth = await category_depth(session, new_parent_id)
-    if depth >= MAX_CATEGORY_DEPTH:
+    parent_depth = await category_depth(session, new_parent_id)
+    subtree_height = await category_subtree_height(session, category_id)
+    if parent_depth + subtree_height > MAX_CATEGORY_DEPTH:
         raise CategoryDepthError(MAX_CATEGORY_DEPTH)

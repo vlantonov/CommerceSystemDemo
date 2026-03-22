@@ -117,9 +117,66 @@ async def test_validate_category_reparent_raises_depth_error(monkeypatch: pytest
         "category_depth",
         AsyncMock(return_value=category_service.MAX_CATEGORY_DEPTH),
     )
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_height",
+        AsyncMock(return_value=1),
+    )
 
     with pytest.raises(category_service.CategoryDepthError):
         await category_service.validate_category_reparent(session, category_id=1, new_parent_id=2)
+
+
+@pytest.mark.asyncio
+async def test_validate_category_reparent_raises_depth_error_for_deep_subtree(monkeypatch: pytest.MonkeyPatch):
+    """Moving a category with a deep subtree under a parent should fail if combined depth exceeds limit."""
+    session = AsyncMock()
+    monkeypatch.setattr(
+        category_service,
+        "get_category_or_none",
+        AsyncMock(return_value=SimpleNamespace(id=2, parent_id=None)),
+    )
+    monkeypatch.setattr(category_service, "validate_no_cycles", AsyncMock(return_value=None))
+    # Parent depth alone is fine (90 < 100), but subtree adds 15 → 90 + 15 = 105 > 100
+    monkeypatch.setattr(
+        category_service,
+        "category_depth",
+        AsyncMock(return_value=90),
+    )
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_height",
+        AsyncMock(return_value=15),
+    )
+
+    with pytest.raises(category_service.CategoryDepthError):
+        await category_service.validate_category_reparent(session, category_id=1, new_parent_id=2)
+
+
+@pytest.mark.asyncio
+async def test_validate_category_reparent_allows_when_combined_depth_fits(monkeypatch: pytest.MonkeyPatch):
+    """Moving a category succeeds when parent depth + subtree height fits within limit."""
+    session = AsyncMock()
+    monkeypatch.setattr(
+        category_service,
+        "get_category_or_none",
+        AsyncMock(return_value=SimpleNamespace(id=2, parent_id=None)),
+    )
+    monkeypatch.setattr(category_service, "validate_no_cycles", AsyncMock(return_value=None))
+    # Parent depth 90, subtree height 10 → 90 + 10 = 100 <= 100 → OK
+    monkeypatch.setattr(
+        category_service,
+        "category_depth",
+        AsyncMock(return_value=90),
+    )
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_height",
+        AsyncMock(return_value=10),
+    )
+
+    # Should not raise
+    await category_service.validate_category_reparent(session, category_id=1, new_parent_id=2)
 
 
 @pytest.mark.asyncio
