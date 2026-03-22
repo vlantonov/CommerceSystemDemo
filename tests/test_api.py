@@ -13,13 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import main as app_main
 from app.main import create_app
-from app.db.session import get_session
+from app.db.session import get_engine, get_session, get_session_factory
 
 
 @pytest.fixture
 async def client(db_session: AsyncSession):
     """Create an AsyncClient with mocked dependency injection."""
     app = create_app()
+
+    # httpx ASGITransport does not trigger ASGI lifespan, so populate
+    # app.state with the engine / factory that conftest already initialised.
+    app.state.engine = get_engine()
+    app.state.session_factory = get_session_factory()
     
     async def override_get_session():
         yield db_session
@@ -46,7 +51,7 @@ async def test_health_endpoint(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
     """Test the health check reports error after all retries are exhausted."""
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock
 
     app = create_app()
 
@@ -60,8 +65,8 @@ async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        with patch("app.db.session.get_engine", return_value=mock_engine):
-            response = await ac.get("/health")
+        app.state.engine = mock_engine
+        response = await ac.get("/health")
 
     app.dependency_overrides.clear()
 
@@ -76,7 +81,7 @@ async def test_health_endpoint_database_unavailable(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_health_endpoint_database_recovers_on_retry(db_session: AsyncSession):
     """Test that health check succeeds when DB fails first then recovers."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    from unittest.mock import AsyncMock, MagicMock
 
     app = create_app()
 
@@ -101,8 +106,8 @@ async def test_health_endpoint_database_recovers_on_retry(db_session: AsyncSessi
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        with patch("app.db.session.get_engine", return_value=mock_engine):
-            response = await ac.get("/health")
+        app.state.engine = mock_engine
+        response = await ac.get("/health")
 
     app.dependency_overrides.clear()
 
@@ -124,6 +129,8 @@ async def test_health_endpoint_metrics_recorded_on_success(db_session: AsyncSess
         yield db_session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.state.engine = get_engine()
+    app.state.session_factory = get_session_factory()
 
     mock_counter = MagicMock()
     mock_histogram = MagicMock()
@@ -147,7 +154,7 @@ async def test_health_endpoint_metrics_recorded_on_success(db_session: AsyncSess
 @pytest.mark.asyncio
 async def test_health_endpoint_metrics_recorded_on_failure(db_session: AsyncSession):
     """Test that health check metrics are recorded on DB failure."""
-    from unittest.mock import AsyncMock, MagicMock, call, patch
+    from unittest.mock import AsyncMock, MagicMock, patch
 
     app = create_app()
 
@@ -164,8 +171,8 @@ async def test_health_endpoint_metrics_recorded_on_failure(db_session: AsyncSess
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        with patch("app.db.session.get_engine", return_value=mock_engine), \
-             patch("app.observability.metrics.health_check_total", mock_counter), \
+        app.state.engine = mock_engine
+        with patch("app.observability.metrics.health_check_total", mock_counter), \
              patch("app.observability.metrics.health_check_duration_seconds", mock_histogram):
             response = await ac.get("/health")
 

@@ -5,7 +5,7 @@ import asyncio
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.db.session import get_session, get_session_factory
+from app.db.session import get_engine, get_session, get_session_factory
 from app.main import create_app
 
 
@@ -14,6 +14,9 @@ async def concurrent_client(db_session):
     """Create a test client that gives each request an independent DB session."""
     app = create_app()
     session_factory = get_session_factory()
+
+    app.state.engine = get_engine()
+    app.state.session_factory = session_factory
 
     async def override_get_session():
         async with session_factory() as session:
