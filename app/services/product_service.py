@@ -10,7 +10,7 @@ def _escape_like(pattern: str) -> str:
     """Escape LIKE metacharacters (%, _, \\) so they match literally."""
     return re.sub(r"([%_\\])", r"\\\1", pattern)
 
-from app.observability.db_timing import timed_execute_scalar_one, timed_execute_scalars_all
+from app.observability.db_timing import timed_execute_all, timed_execute_scalars_all
 from app.models.product import Product
 from app.services.category_service import category_subtree_cte
 
@@ -50,21 +50,30 @@ async def search_products(
     query = query.order_by(Product.id)
     timing_context["query_build_ms"] = (perf_counter() - query_build_start) * 1000
 
-    # Fetch data and count on the provided session for a consistent snapshot.
+    # First-page fast path: fetch data only, infer total from result count.
     data_query_start = perf_counter()
     records = await timed_execute_scalars_all(session, query.limit(limit).offset(offset))
     timing_context["data_query_ms"] = (perf_counter() - data_query_start) * 1000
 
-    # Skip COUNT(*) when the total is inferrable from the result set.
-    # If we're on the first page and fewer rows than the page limit were returned,
-    # all matching rows fit on this page so total == offset + len(records).
     if offset == 0 and len(records) < limit:
         total = len(records)
         timing_context["count_query_ms"] = 0.0
     else:
-        total_query = select(func.count()).select_from(query.subquery())
+        # Use COUNT(*) OVER() window function to get the total in a single
+        # query instead of re-executing the full subquery for a separate COUNT.
+        count_col = func.count().over().label("_total")
+        windowed_query = (
+            query.add_columns(count_col).limit(limit).offset(offset)
+        )
         count_query_start = perf_counter()
-        total = await timed_execute_scalar_one(session, total_query)
+        rows = await timed_execute_all(session, windowed_query)
         timing_context["count_query_ms"] = (perf_counter() - count_query_start) * 1000
+
+        if rows:
+            records = [row[0] for row in rows]
+            total = rows[0][1]
+        else:
+            records = []
+            total = 0
 
     return records, total
