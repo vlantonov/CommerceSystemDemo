@@ -23,6 +23,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.48b0,<1.0.0",
     "opentelemetry-instrumentation-sqlalchemy>=0.48b0,<1.0.0",
     "prometheus-client>=0.20.0,<1.0.0",
+    "slowapi>=0.1.9,<1.0.0",
 ]
 
 [project.optional-dependencies]

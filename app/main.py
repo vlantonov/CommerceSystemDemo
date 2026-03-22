@@ -9,6 +9,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import TemplateNotFound
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.api import api_router
 from app.core.config import get_settings
@@ -75,11 +78,18 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
 
+    limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=[settings.rate_limit_default],
+    )
+
     app = FastAPI(
         title="Commerce System Demo",
         version="0.1.5",
         lifespan=lifespan,
     )
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.router.route_class = ObservabilityRoute
     initialize_app_observability(app, settings)
     app.include_router(api_router, prefix=settings.api_prefix)
