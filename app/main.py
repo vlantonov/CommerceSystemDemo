@@ -90,7 +90,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Commerce System Demo",
-        version="0.1.5",
+        version="0.2.0",
         lifespan=lifespan,
     )
     app.state.limiter = limiter

@@ -11,9 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Enhanced search with full-text indexing support
 - Bulk import/export endpoints for products and categories
-- Rate limiting and request throttling
 - Advanced filtering options for product search
 - Product images storage optimization
+
+## [0.2.0] - 2026-03-22
+
+### Added
+
+- Rate limiting with slowapi — IP-based throttling on search endpoint with configurable default and per-route limits
+- `rate_limit_default` and `rate_limit_search` settings in `app/core/config.py`
+- Alembic migration framework with async PostgreSQL support (`alembic/` directory, `alembic.ini`)
+- Initial Alembic migration (`001_initial_schema.py`) matching the existing `create_all` schema
+- `timed_execute_all`, `timed_execute_one` helpers in `app/observability/db_timing.py` for instrumented query execution
+- `_escape_like()` utility in `app/services/product_service.py` for sanitizing LIKE metacharacters
+- `field_serializer` on `ProductUpdate.image_url` to serialize `AnyHttpUrl` to plain `str`
+- Integration tests for category depth limits, cycle detection, self-reference rejection, and LIKE injection
+- Documentation in README clarifying `.env` setup steps with a table of key variables and defaults
+
+### Changed
+
+- Search query uses `COUNT(*) OVER()` window function instead of a separate count query, eliminating a second database roundtrip
+- Category depth validation (`validate_category_parent`) consolidated from N+1 sequential queries to a single recursive CTE
+- Category reparent validation (`validate_category_reparent`) consolidated from 4 sequential queries to a single combined CTE query
+- `get_session` dependency now reads from `request.app.state.session_factory` (proper DI via app state) instead of module-level globals
+- Application lifespan stores `engine` and `session_factory` on `app.state`
+- Health endpoint reads engine from `request.app.state.engine` instead of importing `get_engine()`
+- `create_schema()` / `drop_schema()` accept an optional `engine` parameter
+- Test fixtures set `app.state.engine` and `app.state.session_factory` explicitly (httpx ASGITransport skips ASGI lifespan)
+
+### Fixed
+
+- LIKE metacharacters (`%`, `_`, `\`) in search queries are now escaped, preventing wildcard injection
+- `ProductUpdate.image_url` now serializes correctly from `AnyHttpUrl` to `str` for database persistence
+
+### Security
+
+- Added IP-based rate limiting to protect against request flooding
+- Escaped LIKE wildcards in user-supplied search input to prevent pattern injection
 
 ## [0.1.5] - 2026-03-22
 
