@@ -1014,3 +1014,181 @@ async def test_update_product_omitted_fields_unchanged(client: AsyncClient):
     assert data["sku"] == "OMIT-001"
     assert data["price"] == "99.00"
     assert data["image_url"] == "https://example.com/keep.png"
+
+
+# ============================================================================
+# Category Depth Limit Tests
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_create_category_exceeding_depth_limit(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """Test that creating a category chain beyond MAX_CATEGORY_DEPTH is rejected."""
+    from app.services import category_service as cs
+
+    monkeypatch.setattr(cs, "MAX_CATEGORY_DEPTH", 3)
+
+    # Build chain: root → L1 → L2 (depth 3)
+    root = (await client.post("/api/v1/categories", json={"name": "Depth-Root"})).json()
+    l1 = (await client.post("/api/v1/categories", json={"name": "Depth-L1", "parent_id": root["id"]})).json()
+    l2 = (await client.post("/api/v1/categories", json={"name": "Depth-L2", "parent_id": l1["id"]})).json()
+    assert l2["parent_id"] == l1["id"]
+
+    # L3 should be rejected — depth would be 4 > 3
+    response = await client.post(
+        "/api/v1/categories",
+        json={"name": "Depth-L3", "parent_id": l2["id"]},
+    )
+    assert response.status_code == 422
+    assert "depth" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reparent_category_exceeding_depth_limit(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """Test that re-parenting a subtree so combined depth exceeds the limit is rejected."""
+    from app.services import category_service as cs
+
+    monkeypatch.setattr(cs, "MAX_CATEGORY_DEPTH", 4)
+
+    # Chain A: A1 → A2 → A3 (height 3)
+    a1 = (await client.post("/api/v1/categories", json={"name": "ChainA-1"})).json()
+    a2 = (await client.post("/api/v1/categories", json={"name": "ChainA-2", "parent_id": a1["id"]})).json()
+    a3 = (await client.post("/api/v1/categories", json={"name": "ChainA-3", "parent_id": a2["id"]})).json()
+
+    # Chain B: B1 → B2 (depth 2)
+    b1 = (await client.post("/api/v1/categories", json={"name": "ChainB-1"})).json()
+    b2 = (await client.post("/api/v1/categories", json={"name": "ChainB-2", "parent_id": b1["id"]})).json()
+
+    # Try to move A1 under B2 → depth would be 2 + 3 = 5 > 4
+    response = await client.patch(
+        f"/api/v1/categories/{a1['id']}",
+        json={"parent_id": b2["id"]},
+    )
+    assert response.status_code == 422
+    assert "depth" in response.json()["detail"].lower()
+
+
+# ============================================================================
+# Category Cycle Detection Tests
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_reparent_category_creating_cycle_rejected(client: AsyncClient):
+    """Test that re-parenting a parent under its own child is rejected as a cycle."""
+    parent = (await client.post("/api/v1/categories", json={"name": "Cycle-Parent"})).json()
+    child = (await client.post(
+        "/api/v1/categories",
+        json={"name": "Cycle-Child", "parent_id": parent["id"]},
+    )).json()
+
+    # Try to make the parent a child of its own child → cycle
+    response = await client.patch(
+        f"/api/v1/categories/{parent['id']}",
+        json={"parent_id": child["id"]},
+    )
+    assert response.status_code == 422
+    assert "cycle" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reparent_category_creating_deep_cycle_rejected(client: AsyncClient):
+    """Test that a cycle through multiple levels is detected and rejected."""
+    a = (await client.post("/api/v1/categories", json={"name": "CycleDeep-A"})).json()
+    b = (await client.post("/api/v1/categories", json={"name": "CycleDeep-B", "parent_id": a["id"]})).json()
+    c = (await client.post("/api/v1/categories", json={"name": "CycleDeep-C", "parent_id": b["id"]})).json()
+
+    # Try to make A a child of C → A→B→C→A cycle
+    response = await client.patch(
+        f"/api/v1/categories/{a['id']}",
+        json={"parent_id": c["id"]},
+    )
+    assert response.status_code == 422
+    assert "cycle" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reparent_category_self_reference_rejected(client: AsyncClient):
+    """Test that setting a category as its own parent is rejected."""
+    cat = (await client.post("/api/v1/categories", json={"name": "Self-Ref"})).json()
+
+    response = await client.patch(
+        f"/api/v1/categories/{cat['id']}",
+        json={"parent_id": cat["id"]},
+    )
+    assert response.status_code == 422
+    assert "cycle" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reparent_to_nonexistent_parent_rejected(client: AsyncClient):
+    """Test that re-parenting to a nonexistent category returns 404."""
+    cat = (await client.post("/api/v1/categories", json={"name": "Orphan-Move"})).json()
+
+    response = await client.patch(
+        f"/api/v1/categories/{cat['id']}",
+        json={"parent_id": 99999},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_category_with_nonexistent_parent_rejected(client: AsyncClient):
+    """Test that creating a category under a nonexistent parent returns 404."""
+    response = await client.post(
+        "/api/v1/categories",
+        json={"name": "No-Parent", "parent_id": 99999},
+    )
+    assert response.status_code == 404
+
+
+# ============================================================================
+# LIKE Wildcard Injection Tests
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_search_with_percent_wildcard_does_not_match_all(client: AsyncClient):
+    """Test that a search query containing '%' does not act as a LIKE wildcard."""
+    await client.post(
+        "/api/v1/products",
+        json={
+            "title": "Specific Widget",
+            "description": "Only this should NOT match",
+            "sku": "LIKE-SAFE-001",
+            "price": "10.00",
+        },
+    )
+
+    # Searching for literal '%' should not match arbitrary products
+    response = await client.get("/api/v1/products/search?q=%25")
+    assert response.status_code == 200
+    data = response.json()
+    # '%' as a literal character shouldn't match "Specific Widget"
+    for item in data["items"]:
+        assert "%" in item["title"] or "%" in item["sku"]
+
+
+@pytest.mark.asyncio
+async def test_search_with_underscore_wildcard_does_not_match_single_char(client: AsyncClient):
+    """Test that a search query containing '_' does not act as a single-char wildcard."""
+    await client.post(
+        "/api/v1/products",
+        json={
+            "title": "ABC",
+            "description": "Three letter title",
+            "sku": "LIKE-UNDER-001",
+            "price": "10.00",
+        },
+    )
+
+    # '_B_' as LIKE wildcards would match 'ABC', but as literal it should not
+    response = await client.get("/api/v1/products/search?q=_B_")
+    assert response.status_code == 200
+    data = response.json()
+    for item in data["items"]:
+        assert "_B_" in item["title"] or "_B_" in item["sku"].upper()
+
+
+@pytest.mark.asyncio
+async def test_search_with_backslash_is_safe(client: AsyncClient):
+    """Test that a search query containing backslash doesn't cause errors."""
+    response = await client.get("/api/v1/products/search?q=test%5Cvalue")
+    assert response.status_code == 200
