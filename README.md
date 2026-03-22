@@ -739,6 +739,16 @@ pytest tests/test_search.py -q    # Service layer tests
 pytest tests/test_api.py -q       # Endpoint integration tests
 ```
 
+Run opt-in performance benchmarks:
+
+```bash
+pytest -m performance -q
+```
+
+The default test run excludes performance benchmarks to keep CI fast.
+To run benchmarks in GitHub Actions, start the `Python application` workflow
+manually and set `run_performance` to `true`.
+
 Run with coverage:
 
 ```bash
