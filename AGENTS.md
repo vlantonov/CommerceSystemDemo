@@ -6,7 +6,7 @@ Guide for AI coding agents working on the Commerce System Demo project.
 
 Commerce System Demo is a FastAPI-based commerce service that provides RESTful APIs for managing products, categories, and implementing search functionality. The project includes built-in observability with OpenTelemetry metrics, logging, and distributed tracing.
 
-**Current Version**: 0.1.3 (following [Semantic Versioning](https://semver.org/))
+**Current Version**: 0.1.4 (following [Semantic Versioning](https://semver.org/))
 
 ## Setup Commands
 
@@ -79,7 +79,8 @@ app/
 
 ### Run Tests
 
-- **All tests**: `pytest` or `pytest tests/`
+- **Default fast suite**: `pytest` or `pytest tests/` (performance benchmarks are excluded by default)
+- **Performance benchmarks (opt-in)**: `pytest -m performance`
 - **Specific test file**: `pytest tests/test_api.py` or `pytest tests/test_search.py`
 - **Specific test**: `pytest tests/test_api.py::test_create_category -v`
 - **With coverage**: `pytest --cov=app --cov-report=html`
@@ -90,6 +91,7 @@ app/
 - **tests/conftest.py**: Shared fixtures (db_session, client setup)
 - **tests/test_api.py**: Integration tests for CRUD operations and search endpoints
 - **tests/test_search.py**: Service-level search functionality tests
+- **tests/test_category_service_benchmark.py**: Performance benchmark tests for category validation (marked with `@pytest.mark.performance`)
 
 ### Database for Tests
 
@@ -97,11 +99,17 @@ app/
 - Each test session gets a fresh database to avoid state leakage
 - Tests run in async mode (`asyncio_mode = "auto"`)
 
+### CI Test Execution
+
+- **Push/PR CI** runs the default fast suite and excludes `performance`-marked tests
+- **Performance CI** is opt-in via GitHub Actions `workflow_dispatch`
+- To run benchmark CI, start workflow **Python application** with input `run_performance=true`
+
 ## Building and Deployment
 
 ### Docker
 
-- **Build image**: `docker build -t commerce-system-demo:0.1.3 .`
+- **Build image**: `docker build -t commerce-system-demo:0.1.4 .`
 - **View Dockerfile**: Includes Python dependencies, migration scripts, and app code
 - **Build context**: Includes `scripts/`, `app/`, and `observability/` directories
 
@@ -184,7 +192,7 @@ This project follows [Semantic Versioning 2.0.0](https://semver.org/):
 - **MINOR**: Backward-compatible new features
 - **PATCH**: Backward-compatible bug fixes
 
-Current version is **0.1.3** (initial development). Version is defined in:
+Current version is **0.1.4** (initial development). Version is defined in:
 - `pyproject.toml` (project metadata)
 - `app/main.py` (FastAPI version)
 - `app/observability/metrics.py` (meter version)
