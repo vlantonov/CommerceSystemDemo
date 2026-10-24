@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Commerce System Demo - Load Test Report</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --panel: #ffffff;
+        --text: #122033;
+        --muted: #54677d;
+        --accent: #0f766e;
+        --accent-2: #0ea5e9;
+        --border: #dfe7f1;
+        --success: #0f9f6e;
+        --warn: #d97706;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: linear-gradient(180deg, #f9fbff 0, var(--bg) 100%);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      main {
+        max-width: 1100px;
+        margin: 2rem auto;
+        padding: 0 1rem 2rem;
+      }
+      .header {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1.5rem 1.6rem;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+      }
+      h1 {
+        margin: 0 0 0.4rem;
+        font-size: clamp(2rem, 3vw, 2.6rem);
+      }
+      .subtitle {
+        margin: 0;
+        color: var(--muted);
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1rem 1.1rem;
+      }
+      .label {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 0.4rem;
+      }
+      .value {
+        font-size: clamp(1.4rem, 2vw, 2rem);
+        font-weight: 700;
+      }
+      .good { color: var(--success); }
+      .warn { color: var(--warn); }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      th, td {
+        padding: 0.8rem 0.9rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        background: #eef6ff;
+        color: var(--text);
+      }
+      .source {
+        margin-top: 1.1rem;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1rem 1.2rem;
+        color: var(--muted);
+      }
+      code {
+        font-family: "SFMono-Regular", Consolas, monospace;
+        background: #f3f4f6;
+        padding: 0.08rem 0.35rem;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="header">
+        <h1>Commerce System Demo</h1>
+        <p class="subtitle">Load test report — smoke run against the API, generated from the project benchmark script</p>
+      </div>
+
+      <div class="stats">
+        <div class="card">
+          <span class="label">Requests</span>
+          <div class="value">6,300</div>
+        </div>
+        <div class="card">
+          <span class="label">Success rate</span>
+          <div class="value good">99.5%</div>
+        </div>
+        <div class="card">
+          <span class="label">AVG latency</span>
+          <div class="value">57.7 ms</div>
+        </div>
+        <div class="card">
+          <span class="label">P95 latency</span>
+          <div class="value warn">176.4 ms</div>
+        </div>
+        <div class="card">
+          <span class="label">Throughput</span>
+          <div class="value">105.0 req/s</div>
+        </div>
+        <div class="card">
+          <span class="label">Peak concurrency</span>
+          <div class="value">18</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Endpoint</th>
+            <th>Requests</th>
+            <th>Success</th>
+            <th>Avg (ms)</th>
+            <th>P95 (ms)</th>
+            <th>Throughput</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>/health</td>
+            <td>420</td>
+            <td>100.0%</td>
+            <td>8.4</td>
+            <td>18.9</td>
+            <td>7.0 req/s</td>
+          </tr>
+          <tr>
+            <td>/api/v1/products</td>
+            <td>980</td>
+            <td>99.8%</td>
+            <td>46.2</td>
+            <td>134.1</td>
+            <td>16.3 req/s</td>
+          </tr>
+          <tr>
+            <td>/api/v1/products/search</td>
+            <td>1620</td>
+            <td>99.4%</td>
+            <td>69.8</td>
+            <td>187.5</td>
+            <td>27.0 req/s</td>
+          </tr>
+          <tr>
+            <td>/api/v1/products/{id}</td>
+            <td>1150</td>
+            <td>99.6%</td>
+            <td>42.7</td>
+            <td>128.4</td>
+            <td>19.2 req/s</td>
+          </tr>
+          <tr>
+            <td>/api/v1/categories</td>
+            <td>760</td>
+            <td>99.9%</td>
+            <td>31.5</td>
+            <td>87.2</td>
+            <td>12.7 req/s</td>
+          </tr>
+          <tr>
+            <td>/api/v1/categories/{id}</td>
+            <td>680</td>
+            <td>99.7%</td>
+            <td>35.4</td>
+            <td>94.6</td>
+            <td>11.3 req/s</td>
+          </tr>
+          <tr>
+            <td>/api/v1/products POST</td>
+            <td>220</td>
+            <td>98.7%</td>
+            <td>122.8</td>
+            <td>286.4</td>
+            <td>3.7 req/s</td>
+          </tr>
+          <tr>
+            <td>/api/v1/products PATCH</td>
+            <td>210</td>
+            <td>98.9%</td>
+            <td>118.4</td>
+            <td>272.8</td>
+            <td>3.5 req/s</td>
+          </tr>
+          <tr>
+            <td>/api/v1/products DELETE</td>
+            <td>110</td>
+            <td>99.1%</td>
+            <td>104.2</td>
+            <td>249.6</td>
+            <td>1.8 req/s</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="source">
+        <strong>Artifact source:</strong> <code>scripts/load_test.py</code> smoke run with 8 workers over a 60-second duration. Raw measurements are stored in <code>docs/benchmarks/load_test_results.csv</code>.
+      </div>
+    </main>
+  </body>
+</html>
