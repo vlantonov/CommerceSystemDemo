@@ -86,6 +86,7 @@ app/
 - **Specific test**: `pytest tests/test_api.py::test_create_category -v`
 - **With coverage**: `pytest --cov=app --cov-report=html`
 - **Watch mode**: `pytest-watch` (requires pytest-watch package)
+- **Chaos harness (OTel dashboards)**: `python scripts/chaos_test.py --load-duration 240 --workers 10`
 
 ### Test Organization
 

@@ -843,6 +843,7 @@ FastAPI app
 ### 9.3. Local stack
 
 `docker-compose.yml` runs an observability stack:
+* `toxiproxy` provides a programmable TCP proxy for DB chaos scenarios (outage / latency injection)
 * `otel-collector` receives OTLP traces from the API and forwards to Tempo
 * `tempo` stores traces
 * `loki` stores logs
@@ -926,6 +927,13 @@ If the catalog is already seeded, skip the initial setup phase:
 .venv/bin/python scripts/load_test.py --skip-seed --duration 60 --workers 8
 ```
 
+Optional: run a chaos harness that kills DB temporarily and injects DB network
+latency through Toxiproxy while load is active:
+
+```bash
+.venv/bin/python scripts/chaos_test.py --load-duration 240 --workers 10
+```
+
 3. Open the tools:
 * Grafana: `http://127.0.0.1:3000`
 * Prometheus: `http://127.0.0.1:9090`
@@ -950,6 +958,7 @@ Notes:
 * After instrumentation changes, rebuild the application container so the running service exposes the new metrics.
 * Some counters appear only after the first matching event is observed. Until then, Prometheus and Grafana can show no data for that series.
 * The load test intentionally produces successful traffic and controlled 4xx scenarios so the P1, P2, and P3 dashboards all receive data.
+* The chaos harness prints `CHAOS_EVENT` timestamps; use those windows to correlate spikes in P1/P3 dashboard latency and error panels.
 
 ## 10. Implemented Improvements
 
