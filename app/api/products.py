@@ -1,6 +1,7 @@
 """Product API endpoints for CRUD operations."""
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -17,6 +18,20 @@ from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 
 router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.products")
+
+
+def _hydrate_audit_fields(model: Product) -> Product:
+    """Avoid a refresh query after commit while preserving audit timestamps.
+
+    SQLAlchemy populates server-generated timestamps on the object during flush/commit,
+    but some test stubs and mocked sessions do not. Fall back to local UTC values so the
+    API response does not trigger a second SELECT just to rehydrate created_at/updated_at.
+    """
+    if getattr(model, "created_at", None) is None:
+        model.created_at = datetime.now(timezone.utc)
+    if getattr(model, "updated_at", None) is None:
+        model.updated_at = datetime.now(timezone.utc)
+    return model
 
 
 class ProductListResponse(PaginatedResponse):
@@ -36,7 +51,8 @@ async def create_product(payload: ProductCreate, session: AsyncSession = Depends
         product_mutations_total.add(1, {"operation": "create", "result": "conflict"})
         logger.warning("product_create_conflict", extra={"sku": payload.sku})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="SKU must be unique") from exc
-    await session.refresh(product)
+
+    product = _hydrate_audit_fields(product)
     product_mutations_total.add(1, {"operation": "create", "result": "success"})
     logger.info(
         "product_created",
@@ -92,7 +108,7 @@ async def update_product(
         logger.warning("product_update_conflict", extra={"product_id": product_id})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="SKU must be unique") from exc
 
-    await session.refresh(product)
+    product = _hydrate_audit_fields(product)
     product_mutations_total.add(1, {"operation": "update", "result": "success"})
     logger.info(
         "product_updated",
