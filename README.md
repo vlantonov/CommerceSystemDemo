@@ -357,6 +357,7 @@ The API follows REST conventions over JSON and is designed for low-latency filte
 * Base path: `/api/v1`
 * Content type: `application/json`
 * No authentication layer is required in this task.
+* Proposed production authentication strategy is documented in [docs/adr/0001-authentication-strategy.md](docs/adr/0001-authentication-strategy.md).
 * Timestamps use ISO-8601 UTC format (example: `2026-03-12T10:20:30Z`).
 * All list/search responses are wrapped in a paginated envelope.
 * Validation errors return HTTP `422`; missing resources return HTTP `404`; uniqueness conflicts return HTTP `409`.
