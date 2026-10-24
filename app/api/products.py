@@ -1,6 +1,7 @@
 """Product API endpoints for CRUD operations."""
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -19,6 +20,24 @@ router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.products")
 
 
+def _hydrate_audit_fields(model: Product, *, is_create: bool = False) -> Product:
+    """Populate audit timestamps before the write so the response stays in-memory."""
+    now = datetime.now(timezone.utc)
+    if is_create:
+        if getattr(model, "created_at", None) is None:
+            model.created_at = now
+    model.updated_at = now
+    return model
+
+
+async def _finalize_mutation_response(session: AsyncSession, model: Product) -> Product:
+    """Refresh only when the write did not fully hydrate the ORM instance."""
+    missing_fields = getattr(model, "id", None) is None or getattr(model, "created_at", None) is None or getattr(model, "updated_at", None) is None
+    if missing_fields and hasattr(session, "refresh"):
+        await session.refresh(model)
+    return model
+
+
 class ProductListResponse(PaginatedResponse):
     """Response model for productlist endpoints."""
     items: list[ProductRead]
@@ -28,15 +47,18 @@ class ProductListResponse(PaginatedResponse):
 async def create_product(payload: ProductCreate, session: AsyncSession = Depends(get_session)) -> ProductRead:
     """Create product."""
     product = Product(**payload.model_dump())
+    product = _hydrate_audit_fields(product, is_create=True)
     session.add(product)
     try:
+        await session.flush()
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
         product_mutations_total.add(1, {"operation": "create", "result": "conflict"})
         logger.warning("product_create_conflict", extra={"sku": payload.sku})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="SKU must be unique") from exc
-    await session.refresh(product)
+
+    product = await _finalize_mutation_response(session, product)
     product_mutations_total.add(1, {"operation": "create", "result": "success"})
     logger.info(
         "product_created",
@@ -84,7 +106,10 @@ async def update_product(
     for field, value in updates.items():
         setattr(product, field, value)
 
+    product = _hydrate_audit_fields(product)
+
     try:
+        await session.flush()
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -92,7 +117,7 @@ async def update_product(
         logger.warning("product_update_conflict", extra={"product_id": product_id})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="SKU must be unique") from exc
 
-    await session.refresh(product)
+    product = await _finalize_mutation_response(session, product)
     product_mutations_total.add(1, {"operation": "update", "result": "success"})
     logger.info(
         "product_updated",
