@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.api import api_router
+from app.cache.redis_client import close_redis_client
 from app.core.config import get_settings
 from app.db.session import create_schema, get_engine, get_session_factory, initialize_database
 from app.observability import (
@@ -75,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    await close_redis_client()
     logger.info("application_shutdown")
     stop_log_listener()
 

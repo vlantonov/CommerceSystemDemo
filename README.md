@@ -251,6 +251,7 @@ flowchart TB
 * PostgreSQL is the source of truth for products, categories, prices, and relational constraints.
 * Product image binaries should live outside the relational database; only image URLs and metadata belong in the service data model.
 * Category subtree search is implemented through recursive CTE queries over an adjacency-list category structure.
+* Hot category-subtree lookups can be served from Redis (versioned TTL cache) to reduce repeated recursive CTE latency under bursty search traffic.
 * Search performance relies on targeted indexes and offset-based pagination for the current scale of tens of thousands of products.
 
 ## 6. Database Design
@@ -510,6 +511,9 @@ The `.env` file is **not** committed to the repository (it is listed in `.gitign
 | `TELEMETRY_ENABLED` | `true` | Set to `false` if you are not running the observability stack. |
 | `API_PREFIX` | `/api/v1` | URL prefix for all API routes. |
 | `AUTO_CREATE_SCHEMA` | `true` | Creates tables on startup when no Alembic migration has been run yet. |
+| `REDIS_URL` | _(empty)_ | Optional Redis connection URL for category subtree caching (for example `redis://localhost:6379/0`). |
+| `CATEGORY_SUBTREE_CACHE_ENABLED` | `false` | Enables Redis caching for hot category subtree lookups when `REDIS_URL` is set. |
+| `CATEGORY_SUBTREE_CACHE_TTL_SECONDS` | `300` | TTL for cached category subtree ID lists. |
 
 > **Tip:** When using **Docker Compose** (Option A below), the compose file passes its own `DATABASE_URL` pointing at the containerized PostgreSQL, so the value in `.env` is only used if you run the dev server directly on the host (Option C).
 
@@ -533,6 +537,7 @@ Note:
 * Compose now includes a one-shot `migrate-indexes` service that runs `scripts/migrate_indexes.py` after PostgreSQL becomes healthy.
 * The `app` service waits for this migration to complete successfully before starting.
 * On a fresh database, `migrate-indexes` now creates the base schema first, then applies indexes, so `docker compose up -d` succeeds on first boot.
+* Compose includes Redis and enables category subtree caching in the `app` container by default for lower-latency repeat subtree searches.
 * Optional: set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in your shell or `.env` before `docker compose up` to override the default local database credentials.
 
 #### Option B: Run observability locally against a remote app and database
@@ -1010,6 +1015,7 @@ The findings below are based on observed load-test runs, production-like remote 
 The 200ms target remains the default expectation, but the following scenarios can legitimately exceed it.
 
 * Search requests that require both data retrieval and `COUNT(*)` (for example price-range searches with non-trivial result sets) may exceed 200ms because they execute two DB-heavy phases.
+* Repeated searches on the same category subtree now benefit from Redis-cached descendant IDs, reducing recursive CTE pressure on hot paths.
 * Mutation endpoints (`POST`, `PATCH`, `DELETE`) can exceed 200ms under concurrent load because they include validation reads plus write/commit phases in one request.
 * Database slow-tier events (observed as ~90-100ms query durations) can push otherwise normal requests above 200ms, especially when multiple queries occur in the same request.
 * Burst concurrency can temporarily increase queue wait and in-flight pressure, which raises end-to-end latency even when individual SQL statements are healthy.
