@@ -1,8 +1,9 @@
 """Product API endpoints for CRUD operations."""
 
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +13,7 @@ from app.models.product import Product
 from app.observability.db_timing import timed_execute_scalar_one, timed_execute_scalars_all, timed_get
 from app.observability.metrics import product_mutations_total
 from app.observability.route import ObservabilityRoute
-from app.schemas.common import PaginatedResponse
+from app.schemas.common import ErrorDetailResponse, PaginatedResponse
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 
 router = APIRouter(route_class=ObservabilityRoute)
@@ -24,7 +25,15 @@ class ProductListResponse(PaginatedResponse):
     items: list[ProductRead]
 
 
-@router.post("", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ProductRead,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorDetailResponse, "description": "Malformed request body"},
+        409: {"model": ErrorDetailResponse, "description": "SKU conflict"},
+    },
+)
 async def create_product(payload: ProductCreate, session: AsyncSession = Depends(get_session)) -> ProductRead:
     """Create product."""
     product = Product(**payload.model_dump())
@@ -45,8 +54,15 @@ async def create_product(payload: ProductCreate, session: AsyncSession = Depends
     return ProductRead.model_validate(product)
 
 
-@router.get("/{product_id}", response_model=ProductRead)
-async def get_product(product_id: int, session: AsyncSession = Depends(get_session)) -> ProductRead:
+@router.get(
+    "/{product_id}",
+    response_model=ProductRead,
+    responses={404: {"model": ErrorDetailResponse, "description": "Product not found"}},
+)
+async def get_product(
+    product_id: Annotated[int, Path(ge=1, le=2147483647)],
+    session: AsyncSession = Depends(get_session),
+) -> ProductRead:
     """Get product."""
     product = await timed_get(session, Product, product_id)
     if product is None:
@@ -69,9 +85,19 @@ async def list_products(
     return ProductListResponse(items=[ProductRead.model_validate(item) for item in records], total=total, limit=limit, offset=offset)
 
 
-@router.patch("/{product_id}", response_model=ProductRead)
+@router.patch(
+    "/{product_id}",
+    response_model=ProductRead,
+    responses={
+        400: {"model": ErrorDetailResponse, "description": "Malformed request body"},
+        404: {"model": ErrorDetailResponse, "description": "Product not found"},
+        409: {"model": ErrorDetailResponse, "description": "SKU conflict"},
+    },
+)
 async def update_product(
-    product_id: int, payload: ProductUpdate, session: AsyncSession = Depends(get_session)
+    product_id: Annotated[int, Path(ge=1, le=2147483647)],
+    payload: ProductUpdate,
+    session: AsyncSession = Depends(get_session),
 ) -> ProductRead:
     """Update product."""
     product = await timed_get(session, Product, product_id)
@@ -101,8 +127,15 @@ async def update_product(
     return ProductRead.model_validate(product)
 
 
-@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_product(product_id: int, session: AsyncSession = Depends(get_session)) -> None:
+@router.delete(
+    "/{product_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"model": ErrorDetailResponse, "description": "Product not found"}},
+)
+async def delete_product(
+    product_id: Annotated[int, Path(ge=1, le=2147483647)],
+    session: AsyncSession = Depends(get_session),
+) -> None:
     """Delete product."""
     product = await timed_get(session, Product, product_id)
     if product is None:

@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.db.session import get_session
 from app.observability.metrics import search_requests_total, search_result_count, search_zero_results_total
 from app.observability.route import ObservabilityRoute
+from app.schemas.common import FlexibleValidationErrorResponse, RateLimitErrorResponse
 from app.schemas.product import ProductRead, ProductSearchResponse
 from app.services.product_service import search_products
 
@@ -20,7 +21,14 @@ logger = logging.getLogger("app.search")
 _limiter = Limiter(key_func=get_remote_address)
 
 
-@router.get("/search", response_model=ProductSearchResponse)
+@router.get(
+    "/search",
+    response_model=ProductSearchResponse,
+    responses={
+        422: {"model": FlexibleValidationErrorResponse, "description": "Validation error"},
+        429: {"model": RateLimitErrorResponse, "description": "Rate limit exceeded"},
+    },
+)
 @_limiter.limit(lambda: get_settings().rate_limit_search)
 async def search_products_endpoint(
     request: Request,

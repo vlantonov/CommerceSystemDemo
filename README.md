@@ -718,7 +718,8 @@ If you see `Connection refused [Errno 111]`, PostgreSQL is not accessible. Verif
 
 ### 8.3. Testing
 
-The test suite includes **35 integration tests** covering:
+The test suite includes endpoint and service integration tests plus API contract
+tests:
 
 **Service Layer Tests (4 tests)** — `tests/test_search.py`
 * Category subtree filtering with descendants
@@ -733,6 +734,11 @@ The test suite includes **35 integration tests** covering:
 * Advanced search with filters and pagination
 * Error handling (404, 409, 422 responses)
 
+**OpenAPI Contract Tests** — `tests/test_api_contract.py`
+* Schemathesis fuzzing against the generated OpenAPI document
+* Response validation against declared API schemas
+* Detection of undocumented response/status behavior
+
 **Note:** Tests automatically provision a PostgreSQL container via testcontainers — no manual database setup required.
 
 Run all tests:
@@ -741,13 +747,15 @@ Run all tests:
 pytest -q
 ```
 
-Expected output: `35 passed`
+Expected output includes passing tests for service, endpoint, and contract
+suites.
 
 Run specific test file:
 
 ```bash
 pytest tests/test_search.py -q    # Service layer tests
 pytest tests/test_api.py -q       # Endpoint integration tests
+pytest tests/test_api_contract.py -q  # OpenAPI contract tests (Schemathesis)
 ```
 
 Run opt-in performance benchmarks:
@@ -757,6 +765,8 @@ pytest -m performance -q
 ```
 
 The default test run excludes performance benchmarks to keep CI fast.
+Pull requests also run a dedicated contract-test job for
+`tests/test_api_contract.py`.
 To run benchmarks in GitHub Actions, start the `Python application` workflow
 manually and set `run_performance` to `true`.
 
@@ -833,6 +843,7 @@ FastAPI app
 ### 9.3. Local stack
 
 `docker-compose.yml` runs an observability stack:
+* `toxiproxy` provides a programmable TCP proxy for DB chaos scenarios (outage / latency injection)
 * `otel-collector` receives OTLP traces from the API and forwards to Tempo
 * `tempo` stores traces
 * `loki` stores logs
@@ -916,6 +927,13 @@ If the catalog is already seeded, skip the initial setup phase:
 .venv/bin/python scripts/load_test.py --skip-seed --duration 60 --workers 8
 ```
 
+Optional: run a chaos harness that kills DB temporarily and injects DB network
+latency through Toxiproxy while load is active:
+
+```bash
+.venv/bin/python scripts/chaos_test.py --load-duration 240 --workers 10
+```
+
 3. Open the tools:
 * Grafana: `http://127.0.0.1:3000`
 * Prometheus: `http://127.0.0.1:9090`
@@ -940,6 +958,7 @@ Notes:
 * After instrumentation changes, rebuild the application container so the running service exposes the new metrics.
 * Some counters appear only after the first matching event is observed. Until then, Prometheus and Grafana can show no data for that series.
 * The load test intentionally produces successful traffic and controlled 4xx scenarios so the P1, P2, and P3 dashboards all receive data.
+* The chaos harness prints `CHAOS_EVENT` timestamps; use those windows to correlate spikes in P1/P3 dashboard latency and error panels.
 
 ## 10. Implemented Improvements
 

@@ -43,6 +43,24 @@ jobs:
       run: |
         pytest
 
+  contract-tests:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    - name: Test with pytest (contract suite)
+      run: |
+        pytest -q tests/test_api_contract.py
+
   performance-tests:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_performance == true }}
