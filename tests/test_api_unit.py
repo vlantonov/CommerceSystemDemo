@@ -16,6 +16,12 @@ from app.api import search as search_api
 from app.schemas.category import CategoryCreate, CategoryUpdate
 from app.schemas.product import ProductCreate, ProductUpdate
 
+_search_endpoint_handler = getattr(
+    search_api.search_products_endpoint,
+    "__wrapped__",
+    search_api.search_products_endpoint,
+)
+
 
 def make_request() -> Request:
     """Build a minimal Starlette request for direct endpoint invocation."""
@@ -529,7 +535,7 @@ async def test_search_invalid_price_range_returns_422():
     session = AsyncMock()
 
     with pytest.raises(HTTPException) as exc:
-        await search_api.search_products_endpoint(
+        await _search_endpoint_handler(
             request=request,
             q=None,
             min_price=Decimal("10"),
@@ -558,7 +564,7 @@ async def test_search_sets_request_state_and_records_zero_results(monkeypatch: p
 
     monkeypatch.setattr(search_api, "search_products", fake_search_products)
 
-    response = await search_api.search_products_endpoint(
+    response = await _search_endpoint_handler(
         request=request,
         q="gaming",
         min_price=Decimal("100"),
@@ -600,7 +606,7 @@ async def test_search_returns_product_response_items(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(search_api, "search_products", fake_search_products)
 
-    response = await search_api.search_products_endpoint(
+    response = await _search_endpoint_handler(
         request=request,
         q="game",
         min_price=None,
