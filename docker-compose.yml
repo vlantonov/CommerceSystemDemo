@@ -1,6 +1,7 @@
 services:
   db:
-    image: postgres:16-alpine
+    build:
+      context: ./docker/postgres
     container_name: commerce-postgres
     restart: unless-stopped
     environment:
@@ -11,11 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d commerce_demo"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
   migrate-indexes:
     build:
