@@ -2,7 +2,7 @@
 
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -175,6 +175,9 @@ async def test_get_category_subtree_ids_cache_miss_stores_result(monkeypatch: py
     redis_client.get = AsyncMock(side_effect=[None, None])
     redis_client.set = AsyncMock()
 
+    cache_hits_add = MagicMock()
+    cache_misses_add = MagicMock()
+
     monkeypatch.setattr(
         category_service,
         "get_settings",
@@ -182,6 +185,16 @@ async def test_get_category_subtree_ids_cache_miss_stores_result(monkeypatch: py
     )
     monkeypatch.setattr(category_service, "get_redis_client", lambda: redis_client)
     monkeypatch.setattr(category_service, "timed_execute_scalars_all", AsyncMock(return_value=[1, 2, 3]))
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_cache_hits_total",
+        SimpleNamespace(add=cache_hits_add),
+    )
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_cache_misses_total",
+        SimpleNamespace(add=cache_misses_add),
+    )
 
     subtree_ids = await category_service.get_category_subtree_ids(session, category_id=1)
 
@@ -191,6 +204,8 @@ async def test_get_category_subtree_ids_cache_miss_stores_result(monkeypatch: py
         json.dumps([1, 2, 3]),
         ex=120,
     )
+    cache_hits_add.assert_not_called()
+    cache_misses_add.assert_called_once_with(1)
 
 
 @pytest.mark.asyncio
@@ -201,6 +216,9 @@ async def test_get_category_subtree_ids_cache_hit_skips_db(monkeypatch: pytest.M
 
     db_fetch = AsyncMock()
 
+    cache_hits_add = MagicMock()
+    cache_misses_add = MagicMock()
+
     monkeypatch.setattr(
         category_service,
         "get_settings",
@@ -208,11 +226,23 @@ async def test_get_category_subtree_ids_cache_hit_skips_db(monkeypatch: pytest.M
     )
     monkeypatch.setattr(category_service, "get_redis_client", lambda: redis_client)
     monkeypatch.setattr(category_service, "timed_execute_scalars_all", db_fetch)
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_cache_hits_total",
+        SimpleNamespace(add=cache_hits_add),
+    )
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_cache_misses_total",
+        SimpleNamespace(add=cache_misses_add),
+    )
 
     subtree_ids = await category_service.get_category_subtree_ids(session, category_id=4)
 
     assert subtree_ids == [4, 5]
     db_fetch.assert_not_awaited()
+    cache_hits_add.assert_called_once_with(1)
+    cache_misses_add.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -221,6 +251,9 @@ async def test_get_category_subtree_ids_falls_back_on_redis_error(monkeypatch: p
     redis_client = AsyncMock()
     redis_client.get = AsyncMock(side_effect=category_service.RedisError("unavailable"))
 
+    cache_hits_add = MagicMock()
+    cache_misses_add = MagicMock()
+
     monkeypatch.setattr(
         category_service,
         "get_settings",
@@ -228,10 +261,22 @@ async def test_get_category_subtree_ids_falls_back_on_redis_error(monkeypatch: p
     )
     monkeypatch.setattr(category_service, "get_redis_client", lambda: redis_client)
     monkeypatch.setattr(category_service, "timed_execute_scalars_all", AsyncMock(return_value=[7]))
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_cache_hits_total",
+        SimpleNamespace(add=cache_hits_add),
+    )
+    monkeypatch.setattr(
+        category_service,
+        "category_subtree_cache_misses_total",
+        SimpleNamespace(add=cache_misses_add),
+    )
 
     subtree_ids = await category_service.get_category_subtree_ids(session, category_id=7)
 
     assert subtree_ids == [7]
+    cache_hits_add.assert_not_called()
+    cache_misses_add.assert_called_once_with(1)
 
 
 @pytest.mark.asyncio

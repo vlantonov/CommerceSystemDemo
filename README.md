@@ -813,6 +813,8 @@ Metrics:
 * `commerce_product_mutations_total` - product create update delete outcomes
 * `commerce_category_mutations_total` - category create update delete outcomes
 * `commerce_category_validation_failures_total` - category validation failures by reason
+* `commerce_category_subtree_cache_hits_total` - Redis cache hits for category subtree lookups
+* `commerce_category_subtree_cache_misses_total` - Redis cache misses/fallbacks for category subtree lookups
 
 ### 9.2. Telemetry flow
 

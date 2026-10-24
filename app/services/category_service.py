@@ -16,6 +16,10 @@ from app.observability.db_timing import (
     timed_execute_scalars_all,
     timed_get,
 )
+from app.observability.metrics import (
+    category_subtree_cache_hits_total,
+    category_subtree_cache_misses_total,
+)
 
 MAX_CATEGORY_DEPTH = 100
 _CATEGORY_SUBTREE_VERSION_KEY = "category_subtree_cache_version"
@@ -135,11 +139,15 @@ async def get_category_subtree_ids(session: AsyncSession, category_id: int) -> l
         if cached_payload:
             decoded = json.loads(cached_payload)
             if isinstance(decoded, list) and all(isinstance(item, int) for item in decoded):
+                category_subtree_cache_hits_total.add(1)
                 return decoded
             logger.warning(
                 "category_subtree_cache_invalid_payload",
                 extra={"cache_key": cache_key, "category_id": category_id},
             )
+            category_subtree_cache_misses_total.add(1)
+        else:
+            category_subtree_cache_misses_total.add(1)
 
         subtree_ids = await _query_category_subtree_ids(session, category_id)
         await redis_client.set(
@@ -149,6 +157,7 @@ async def get_category_subtree_ids(session: AsyncSession, category_id: int) -> l
         )
         return subtree_ids
     except (RedisError, ValueError, TypeError) as exc:
+        category_subtree_cache_misses_total.add(1)
         logger.warning(
             "category_subtree_cache_unavailable",
             extra={"category_id": category_id, "error": str(exc)},
