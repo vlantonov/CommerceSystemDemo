@@ -718,7 +718,8 @@ If you see `Connection refused [Errno 111]`, PostgreSQL is not accessible. Verif
 
 ### 8.3. Testing
 
-The test suite includes **35 integration tests** covering:
+The test suite includes endpoint and service integration tests plus API contract
+tests:
 
 **Service Layer Tests (4 tests)** — `tests/test_search.py`
 * Category subtree filtering with descendants
@@ -733,6 +734,11 @@ The test suite includes **35 integration tests** covering:
 * Advanced search with filters and pagination
 * Error handling (404, 409, 422 responses)
 
+**OpenAPI Contract Tests** — `tests/test_api_contract.py`
+* Schemathesis fuzzing against the generated OpenAPI document
+* Response validation against declared API schemas
+* Detection of undocumented response/status behavior
+
 **Note:** Tests automatically provision a PostgreSQL container via testcontainers — no manual database setup required.
 
 Run all tests:
@@ -741,13 +747,15 @@ Run all tests:
 pytest -q
 ```
 
-Expected output: `35 passed`
+Expected output includes passing tests for service, endpoint, and contract
+suites.
 
 Run specific test file:
 
 ```bash
 pytest tests/test_search.py -q    # Service layer tests
 pytest tests/test_api.py -q       # Endpoint integration tests
+pytest tests/test_api_contract.py -q  # OpenAPI contract tests (Schemathesis)
 ```
 
 Run opt-in performance benchmarks:
@@ -757,6 +765,8 @@ pytest -m performance -q
 ```
 
 The default test run excludes performance benchmarks to keep CI fast.
+Pull requests also run a dedicated contract-test job for
+`tests/test_api_contract.py`.
 To run benchmarks in GitHub Actions, start the `Python application` workflow
 manually and set `run_performance` to `true`.
 
