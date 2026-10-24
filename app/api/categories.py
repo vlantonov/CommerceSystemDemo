@@ -20,6 +20,7 @@ from app.services.category_service import (
     CategoryDepthError,
     CategoryParentNotFoundError,
     get_category_or_none,
+    invalidate_category_subtree_cache,
     validate_category_parent,
     validate_category_reparent,
 )
@@ -69,6 +70,7 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
     await session.refresh(category)
+    await invalidate_category_subtree_cache()
     category_mutations_total.add(1, {"operation": "create", "result": "success"})
     logger.info(
         "category_created",
@@ -162,6 +164,7 @@ async def update_category(
         logger.warning("category_update_conflict", extra={"category_id": category_id})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
     await session.refresh(category)
+    await invalidate_category_subtree_cache()
     category_mutations_total.add(1, {"operation": "update", "result": "success"})
     logger.info(
         "category_updated",
@@ -185,6 +188,7 @@ async def delete_category(category_id: int, session: AsyncSession = Depends(get_
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
     await session.delete(category)
     await session.commit()
+    await invalidate_category_subtree_cache()
     category_mutations_total.add(1, {"operation": "delete", "result": "success"})
     logger.info(
         "category_deleted",

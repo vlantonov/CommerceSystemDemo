@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     health_check_db_timeout: float = 2.0
     rate_limit_default: str = "60/minute"
     rate_limit_search: str = "30/minute"
+    redis_url: str | None = None
+    category_subtree_cache_enabled: bool = False
+    category_subtree_cache_ttl_seconds: int = 300
 
 
 @lru_cache

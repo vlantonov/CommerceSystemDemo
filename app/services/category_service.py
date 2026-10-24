@@ -1,12 +1,30 @@
 """Category business logic helpers and hierarchy utilities."""
 
+import json
+import logging
+
+from redis.exceptions import RedisError
 from sqlalchemy import Select, exists, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache.redis_client import get_redis_client
+from app.core.config import get_settings
 from app.models.category import Category
-from app.observability.db_timing import timed_execute_one, timed_execute_scalar_one, timed_get
+from app.observability.db_timing import (
+    timed_execute_one,
+    timed_execute_scalar_one,
+    timed_execute_scalars_all,
+    timed_get,
+)
+from app.observability.metrics import (
+    category_subtree_cache_hits_total,
+    category_subtree_cache_misses_total,
+)
 
 MAX_CATEGORY_DEPTH = 100
+_CATEGORY_SUBTREE_VERSION_KEY = "category_subtree_cache_version"
+
+logger = logging.getLogger("app.categories")
 
 
 class CategoryParentNotFoundError(LookupError):
@@ -90,6 +108,74 @@ def category_subtree_cte(root_category_id: int):
         select(category_alias.c.id).where(category_alias.c.parent_id == category_tree.c.id)
     )
     return category_tree
+
+
+async def _query_category_subtree_ids(session: AsyncSession, category_id: int) -> list[int]:
+    """Return root + descendant ids from PostgreSQL via recursive CTE."""
+    category_tree = category_subtree_cte(category_id)
+    statement = select(category_tree.c.id).order_by(category_tree.c.id)
+    rows = await timed_execute_scalars_all(session, statement)
+    return [int(category_tree_id) for category_tree_id in rows]
+
+
+def _category_subtree_cache_key(*, category_id: int, version: str) -> str:
+    """Build a versioned Redis key for cached subtree ids."""
+    return f"category_subtree:v{version}:root:{category_id}"
+
+
+async def get_category_subtree_ids(session: AsyncSession, category_id: int) -> list[int]:
+    """Return subtree ids using Redis cache for hot lookups when enabled."""
+    settings = get_settings()
+    redis_client = get_redis_client()
+    if not settings.category_subtree_cache_enabled or redis_client is None:
+        return await _query_category_subtree_ids(session, category_id)
+
+    try:
+        cache_version = await redis_client.get(_CATEGORY_SUBTREE_VERSION_KEY)
+        version = cache_version or "1"
+        cache_key = _category_subtree_cache_key(category_id=category_id, version=version)
+        cached_payload = await redis_client.get(cache_key)
+
+        if cached_payload:
+            decoded = json.loads(cached_payload)
+            if isinstance(decoded, list) and all(isinstance(item, int) for item in decoded):
+                category_subtree_cache_hits_total.add(1)
+                return decoded
+            logger.warning(
+                "category_subtree_cache_invalid_payload",
+                extra={"cache_key": cache_key, "category_id": category_id},
+            )
+            category_subtree_cache_misses_total.add(1)
+        else:
+            category_subtree_cache_misses_total.add(1)
+
+        subtree_ids = await _query_category_subtree_ids(session, category_id)
+        await redis_client.set(
+            cache_key,
+            json.dumps(subtree_ids),
+            ex=settings.category_subtree_cache_ttl_seconds,
+        )
+        return subtree_ids
+    except (RedisError, ValueError, TypeError) as exc:
+        category_subtree_cache_misses_total.add(1)
+        logger.warning(
+            "category_subtree_cache_unavailable",
+            extra={"category_id": category_id, "error": str(exc)},
+        )
+        return await _query_category_subtree_ids(session, category_id)
+
+
+async def invalidate_category_subtree_cache() -> None:
+    """Invalidate subtree cache by bumping the global subtree cache version."""
+    settings = get_settings()
+    redis_client = get_redis_client()
+    if not settings.category_subtree_cache_enabled or redis_client is None:
+        return
+
+    try:
+        await redis_client.incr(_CATEGORY_SUBTREE_VERSION_KEY)
+    except RedisError as exc:
+        logger.warning("category_subtree_cache_invalidation_failed", extra={"error": str(exc)})
 
 
 def _descendant_chain_cte(start_category_id: int, depth_limit: int | None = None):
