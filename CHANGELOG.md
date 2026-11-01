@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Advanced filtering options for product search
 - Product images storage optimization
 
+## [0.2.2] - 2026-11-01
+
+### Added
+
+- Schemathesis-driven API contract tests and a dedicated PR contract CI job
+- Chaos harness for database outage and latency simulation via Toxiproxy
+- Documentation updates covering remote latency verification and local validation guidance
+
+### Changed
+
+- Tightened product and category request bounds to stay within database-safe ranges
+- Updated API contract documentation and pagination behavior to match validated limits
+- Expanded observability and validation guidance in README and AGENTS
+
+### Fixed
+
+- Prevented search parameter overflow by enforcing price bounds before database queries
+- Validated category IDs within the PostgreSQL int32 range before lookup
+- Restricted schema inputs to DB-safe limits for category and product payloads
+- Aligned product and category search API docs and pagination bounds with implementation behavior
+
 ## [0.2.1] - 2026-11-01
 
 ### Documentation

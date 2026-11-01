@@ -1,5 +1,7 @@
 """Shared schema primitives such as pagination models."""
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -16,3 +18,21 @@ class PaginatedResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ErrorDetailResponse(BaseModel):
+    """Schema for HTTP exception responses."""
+
+    detail: str
+
+
+class FlexibleValidationErrorResponse(BaseModel):
+    """Schema for validation-style responses with string or list detail."""
+
+    detail: str | list[dict[str, Any]]
+
+
+class RateLimitErrorResponse(BaseModel):
+    """Schema for rate-limit responses from SlowAPI."""
+
+    error: str
