@@ -53,7 +53,17 @@ class CategoryListResponse(PaginatedResponse):
     items: list[CategoryRead]
 
 
-@router.post("", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=CategoryRead,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorDetailResponse, "description": "Malformed request body"},
+        404: {"model": ErrorDetailResponse, "description": "Parent category not found"},
+        409: {"model": ErrorDetailResponse, "description": "Category name conflict"},
+        422: {"model": FlexibleValidationErrorResponse, "description": "Validation error"},
+    },
+)
 async def create_category(payload: CategoryCreate, session: AsyncSession = Depends(get_session)) -> CategoryRead:
     """Create category."""
     if payload.parent_id is not None:
@@ -123,7 +133,7 @@ async def get_category(
 @router.get("", response_model=CategoryListResponse)
 async def list_categories(
     limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=(2**63 - 1)),
     session: AsyncSession = Depends(get_session),
 ) -> CategoryListResponse:
     """List categories."""

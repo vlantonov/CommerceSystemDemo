@@ -95,7 +95,7 @@ async def get_product(
 @router.get("", response_model=ProductListResponse)
 async def list_products(
     limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=(2**63 - 1)),
     session: AsyncSession = Depends(get_session),
 ) -> ProductListResponse:
     """List products."""
