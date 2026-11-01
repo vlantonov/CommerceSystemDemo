@@ -1,6 +1,7 @@
 """Category API endpoints for CRUD operations."""
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -27,6 +28,24 @@ from app.services.category_service import (
 
 router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.categories")
+
+
+def _hydrate_audit_fields(model: Category, *, is_create: bool = False) -> Category:
+    """Populate audit timestamps before write so the updated model stays hydrated."""
+    now = datetime.now(timezone.utc)
+    if is_create:
+        if getattr(model, "created_at", None) is None:
+            model.created_at = now
+    model.updated_at = now
+    return model
+
+
+async def _finalize_mutation_response(session: AsyncSession, model: Category) -> Category:
+    """Refresh only when the write did not fully hydrate the ORM instance."""
+    missing_fields = getattr(model, "id", None) is None or getattr(model, "created_at", None) is None or getattr(model, "updated_at", None) is None
+    if missing_fields and hasattr(session, "refresh"):
+        await session.refresh(model)
+    return model
 
 
 class CategoryListResponse(PaginatedResponse):
@@ -58,8 +77,10 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
             )
 
     category = Category(name=payload.name, parent_id=payload.parent_id)
+    category = _hydrate_audit_fields(category, is_create=True)
     session.add(category)
     try:
+        await session.flush()
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -69,7 +90,8 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
             extra={"category_name": payload.name, "parent_id": payload.parent_id},
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
-    await session.refresh(category)
+
+    category = await _finalize_mutation_response(session, category)
     await invalidate_category_subtree_cache()
     category_mutations_total.add(1, {"operation": "create", "result": "success"})
     logger.info(
@@ -156,14 +178,18 @@ async def update_category(
     if "name" in updates and updates["name"] is not None:
         category.name = updates["name"]
 
+    category = _hydrate_audit_fields(category)
+
     try:
+        await session.flush()
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
         category_mutations_total.add(1, {"operation": "update", "result": "conflict"})
         logger.warning("category_update_conflict", extra={"category_id": category_id})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
-    await session.refresh(category)
+
+    category = await _finalize_mutation_response(session, category)
     await invalidate_category_subtree_cache()
     category_mutations_total.add(1, {"operation": "update", "result": "success"})
     logger.info(
