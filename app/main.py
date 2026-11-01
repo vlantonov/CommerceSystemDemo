@@ -99,7 +99,12 @@ def create_app() -> FastAPI:
     initialize_app_observability(app, settings)
     app.include_router(api_router, prefix=settings.api_prefix)
 
-    @app.get("/", tags=["home"])
+    @app.get(
+        "/",
+        tags=["home"],
+        response_class=HTMLResponse,
+        responses={200: {"content": {"text/html": {"schema": {"type": "string"}}}}},
+    )
     async def home(request: Request):
         try:
             return templates.TemplateResponse(
@@ -129,7 +134,23 @@ def create_app() -> FastAPI:
                 status_code=200,
             )
 
-    @app.get("/health", tags=["health"])
+    @app.get(
+        "/health",
+        tags=["health"],
+        responses={
+            503: {
+                "description": "Database unavailable",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"},
+                        }
+                    }
+                },
+            }
+        },
+    )
     async def health(request: Request) -> dict[str, str]:
         import asyncio
         import time

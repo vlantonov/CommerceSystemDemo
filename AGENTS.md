@@ -81,16 +81,19 @@ app/
 
 - **Default fast suite**: `pytest` or `pytest tests/` (performance benchmarks are excluded by default)
 - **Performance benchmarks (opt-in)**: `pytest -m performance`
+- **Contract tests**: `pytest tests/test_api_contract.py` or `pytest -m contract`
 - **Specific test file**: `pytest tests/test_api.py` or `pytest tests/test_search.py`
 - **Specific test**: `pytest tests/test_api.py::test_create_category -v`
 - **With coverage**: `pytest --cov=app --cov-report=html`
 - **Watch mode**: `pytest-watch` (requires pytest-watch package)
+- **Chaos harness (OTel dashboards)**: `python scripts/chaos_test.py --load-duration 240 --workers 10`
 
 ### Test Organization
 
 - **tests/conftest.py**: Shared fixtures (db_session, client setup)
 - **tests/test_api.py**: Integration tests for CRUD operations and search endpoints
 - **tests/test_search.py**: Service-level search functionality tests
+- **tests/test_api_contract.py**: Schemathesis contract tests against generated OpenAPI
 - **tests/test_category_service_benchmark.py**: Performance benchmark tests for category validation (marked with `@pytest.mark.performance`)
 
 ### Database for Tests
@@ -102,6 +105,7 @@ app/
 ### CI Test Execution
 
 - **Push/PR CI** runs the default fast suite and excludes `performance`-marked tests
+- **PR CI contract job** runs `tests/test_api_contract.py` as a dedicated Schemathesis check
 - **Performance CI** is opt-in via GitHub Actions `workflow_dispatch`
 - To run benchmark CI, start workflow **Python application** with input `run_performance=true`
 

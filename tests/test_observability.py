@@ -20,6 +20,12 @@ from app.observability import middleware as middleware_mod
 from app.schemas.category import CategoryCreate
 from app.schemas.product import ProductCreate
 
+_search_endpoint_handler = getattr(
+    search_api.search_products_endpoint,
+    "__wrapped__",
+    search_api.search_products_endpoint,
+)
+
 
 def _build_request(path: str = "/x", method: str = "GET") -> Request:
     scope = {
@@ -230,7 +236,7 @@ async def test_search_endpoint_emits_search_metrics(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(search_api, "search_products", fake_search_products)
 
     request = _build_request(path="/api/v1/products/search")
-    response = await search_api.search_products_endpoint(
+    response = await _search_endpoint_handler(
         request=request,
         q="abc",
         min_price=None,

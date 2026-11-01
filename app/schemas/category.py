@@ -21,13 +21,13 @@ class CategoryBase(BaseModel):
 
 class CategoryCreate(CategoryBase):
     """Payload for creating a category under an optional parent."""
-    parent_id: int | None = None
+    parent_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
 
 
 class CategoryUpdate(BaseModel):
     """Partial payload for updating category name or parent link."""
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    parent_id: int | None = None
+    parent_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
 
     @field_validator("name", mode="before")
     @classmethod

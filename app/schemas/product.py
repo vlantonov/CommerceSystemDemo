@@ -15,8 +15,8 @@ class ProductBase(BaseModel):
     description: str = Field(min_length=1, max_length=10000)
     image_url: AnyHttpUrl | None = Field(default=None)
     sku: str = Field(min_length=1, max_length=100, pattern=SKU_REGEX)
-    price: Decimal = Field(ge=Decimal("0"))
-    category_id: int | None = None
+    price: Decimal = Field(ge=Decimal("0"), le=Decimal("9999999999.99"), max_digits=12, decimal_places=2)
+    category_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
 
     @field_serializer("image_url")
     def serialize_image_url(self, value: AnyHttpUrl | None) -> str | None:
@@ -64,8 +64,8 @@ class ProductUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1, max_length=10000)
     image_url: AnyHttpUrl | None = Field(default=None)
     sku: str | None = Field(default=None, min_length=1, max_length=100, pattern=SKU_REGEX)
-    price: Decimal | None = Field(default=None, ge=Decimal("0"))
-    category_id: int | None = None
+    price: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("9999999999.99"), max_digits=12, decimal_places=2)
+    category_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
 
     @field_serializer("image_url")
     def serialize_image_url(self, value: AnyHttpUrl | None) -> str | None:
