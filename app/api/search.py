@@ -33,8 +33,20 @@ _limiter = Limiter(key_func=get_remote_address)
 async def search_products_endpoint(
     request: Request,
     q: str | None = Query(default=None, min_length=1, max_length=255),
-    min_price: Decimal | None = Query(default=None, ge=Decimal("0")),
-    max_price: Decimal | None = Query(default=None, ge=Decimal("0")),
+    min_price: Decimal | None = Query(
+        default=None,
+        ge=Decimal("0"),
+        le=Decimal("9999999999.99"),
+        max_digits=12,
+        decimal_places=2,
+    ),
+    max_price: Decimal | None = Query(
+        default=None,
+        ge=Decimal("0"),
+        le=Decimal("9999999999.99"),
+        max_digits=12,
+        decimal_places=2,
+    ),
     category_id: int | None = Query(default=None, ge=1, le=2_147_483_647),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0, le=(2**63 - 1)),
