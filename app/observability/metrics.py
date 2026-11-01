@@ -101,6 +101,18 @@ category_validation_failures_total: Counter = _meter.create_counter(
     description="Total number of category validation failures",
 )
 
+category_subtree_cache_hits_total: Counter = _meter.create_counter(
+    name="commerce_category_subtree_cache_hits_total",
+    unit="1",
+    description="Total number of Redis cache hits for category subtree lookups",
+)
+
+category_subtree_cache_misses_total: Counter = _meter.create_counter(
+    name="commerce_category_subtree_cache_misses_total",
+    unit="1",
+    description="Total number of Redis cache misses for category subtree lookups",
+)
+
 health_check_total: Counter = _meter.create_counter(
     name="commerce_health_check_total",
     unit="1",
