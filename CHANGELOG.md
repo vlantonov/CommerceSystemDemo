@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
+_No entries yet._
+
+## [0.3.0] - 2026-11-01
+
+### Added
+
 - Enhanced search with full-text indexing support
 - Bulk import/export endpoints for products and categories
 - Advanced filtering options for product search
@@ -209,8 +215,8 @@ This is an early development release. The public API may change in subsequent re
 
 | Version | Release Date | Status | Notes |
 |---------|-------------|--------|-------|
-| [0.1.1](#011---2026-03-19) | 2026-03-19 | Current | Patch release for whitespace validation and deterministic ordering |
-| [0.1.0](#010---2024-03-19) | 2024-03-19 | Previous | Initial release with core functionality |
+| [0.3.0](#030---2026-11-01) | 2026-11-01 | Current | Release of planned search and bulk data capability enhancements |
+| [0.2.2](#022---2026-11-01) | 2026-11-01 | Previous | Contract testing, latency chaos harness, and validation hardening updates |
 | [Unreleased](#unreleased) | - | In Progress | Upcoming features and improvements |
 
 ---
