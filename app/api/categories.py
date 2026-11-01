@@ -2,6 +2,7 @@
 
 import logging
 from typing import Annotated
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy import func, select
@@ -29,22 +30,30 @@ router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.categories")
 
 
+def _hydrate_audit_fields(model: Category, *, is_create: bool = False) -> Category:
+    """Populate audit timestamps before write so the updated model stays hydrated."""
+    now = datetime.now(timezone.utc)
+    if is_create:
+        if getattr(model, "created_at", None) is None:
+            model.created_at = now
+    model.updated_at = now
+    return model
+
+
+async def _finalize_mutation_response(session: AsyncSession, model: Category) -> Category:
+    """Refresh only when the write did not fully hydrate the ORM instance."""
+    missing_fields = getattr(model, "id", None) is None or getattr(model, "created_at", None) is None or getattr(model, "updated_at", None) is None
+    if missing_fields and hasattr(session, "refresh"):
+        await session.refresh(model)
+    return model
+
+
 class CategoryListResponse(PaginatedResponse):
     """Response model for categorylist endpoints."""
     items: list[CategoryRead]
 
 
-@router.post(
-    "",
-    response_model=CategoryRead,
-    status_code=status.HTTP_201_CREATED,
-    responses={
-        400: {"model": ErrorDetailResponse, "description": "Malformed request body"},
-        404: {"model": ErrorDetailResponse, "description": "Parent category not found"},
-        409: {"model": ErrorDetailResponse, "description": "Category name conflict"},
-        422: {"model": FlexibleValidationErrorResponse, "description": "Validation error"},
-    },
-)
+@router.post("", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
 async def create_category(payload: CategoryCreate, session: AsyncSession = Depends(get_session)) -> CategoryRead:
     """Create category."""
     if payload.parent_id is not None:
@@ -68,8 +77,10 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
             )
 
     category = Category(name=payload.name, parent_id=payload.parent_id)
+    category = _hydrate_audit_fields(category, is_create=True)
     session.add(category)
     try:
+        await session.flush()
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -79,7 +90,8 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
             extra={"category_name": payload.name, "parent_id": payload.parent_id},
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
-    await session.refresh(category)
+
+    category = await _finalize_mutation_response(session, category)
     category_mutations_total.add(1, {"operation": "create", "result": "success"})
     logger.info(
         "category_created",
@@ -183,14 +195,18 @@ async def update_category(
     if "name" in updates and updates["name"] is not None:
         category.name = updates["name"]
 
+    category = _hydrate_audit_fields(category)
+
     try:
+        await session.flush()
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
         category_mutations_total.add(1, {"operation": "update", "result": "conflict"})
         logger.warning("category_update_conflict", extra={"category_id": category_id})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
-    await session.refresh(category)
+
+    category = await _finalize_mutation_response(session, category)
     category_mutations_total.add(1, {"operation": "update", "result": "success"})
     logger.info(
         "category_updated",
