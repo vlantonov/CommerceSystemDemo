@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Build stage: install dependencies into a virtual environment
 # ---------------------------------------------------------------------------
-FROM python:3.11-slim AS builder
+FROM python:3.15-slim AS builder
 
 WORKDIR /build
 
@@ -26,7 +26,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 # ---------------------------------------------------------------------------
 # Runtime stage: lean image with only what is needed to run the app
 # ---------------------------------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 # Runtime dependency of asyncpg
 RUN apt-get update && apt-get install -y --no-install-recommends \
