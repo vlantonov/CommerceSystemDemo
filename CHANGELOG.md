@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- README Section 12 "Remote Deployment Latency Verification" documenting the 200ms-target verification against the live Render deployment, including testing methodology, per-endpoint latency results, and findings
+
 ### Planned
 
 - Enhanced search with full-text indexing support

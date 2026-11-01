@@ -48,6 +48,10 @@
    * [10.3. Logging and Metrics Path](#103-logging-and-metrics-path)
    * [10.4. Validation and Benchmarks](#104-validation-and-benchmarks)
 * [11. Investigation Conclusions on 200ms Target](#11-investigation-conclusions-on-200ms-target)
+* [12. Remote Deployment Latency Verification](#12-remote-deployment-latency-verification)
+   * [12.1. Testing methodology](#121-testing-methodology)
+   * [12.2. Results](#122-results)
+   * [12.3. Findings](#123-findings)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -1017,3 +1021,49 @@ The 200ms target remains the default expectation, but the following scenarios ca
 * Cold-start and warmup windows after deploy/restart may produce transient latency spikes before caches and pools stabilize.
 
 Mitigation is tracked in the observability dashboards and logs (`request_slow`, DB timing decomposition fields, pool usage), and tuning guidance is documented in the remote service configuration section.
+
+## 12. Remote Deployment Latency Verification
+
+This section records a direct verification of the 200ms target against the live
+Render deployment at `https://commercesystemdemo.onrender.com`, including the
+methodology so the run can be reproduced.
+
+### 12.1. Testing methodology
+
+* **Target**: remote deployment `https://commercesystemdemo.onrender.com` (cross-region managed host + managed PostgreSQL).
+* **Traffic generation**: [scripts/load_test.py](scripts/load_test.py) with `--workers 8 --duration 90`, using the standard weighted mix (search 33%, product reads 26%, category reads 11%, product mutations 11%, category mutations 8%, errors 5%, category validation failures 6%). The script seeds a baseline catalog, then drives concurrent traffic and reports throughput and error counts.
+* **Latency capture**: because `load_test.py` reports only throughput/error counters (it is primarily a dashboard smoke-test), a companion latency probe reuses the same traffic generators and records per-request wall-clock latency, bucketed by `METHOD /path-template`, to compute p50/p95/p99 and the share of requests within 200ms. Run `--workers 8 --duration 60`.
+* **Network baseline**: 10 sequential `GET /health` probes measured client→Render round-trip time to separate network cost from server processing. Observed RTT: min 62ms, median ~88ms, max 132ms. This baseline is included in every end-to-end latency number below; subtract roughly 70–90ms to estimate server-side time.
+* **Note**: all measurements are end-to-end from a remote client, so they include client→Render network latency and public-internet jitter that in-cluster or same-region clients would not incur.
+
+### 12.2. Results
+
+Load generation (`load_test.py`, 8 workers × 90s): 2,700 requests, 0 unexpected
+errors, ~30 RPS sustained.
+
+Latency probe (same mix, 8 workers × 60s, 1,975 timed requests), latency in milliseconds:
+
+| Endpoint | n | p50 | p95 | p99 | max | ≤200ms |
+|---|---|---|---|---|---|---|
+| GET /products/search | 668 | 162 | 267 | 583 | 771 | 64% |
+| GET /products/{id} | 433 | 159 | 259 | 342 | 635 | 69% |
+| GET /categories/{id} | 156 | 153 | 256 | 326 | 333 | 76% |
+| GET /products (list) | 103 | 180 | 293 | 368 | 634 | 55% |
+| GET /categories (list) | 46 | 183 | 297 | 319 | 323 | 57% |
+| POST /products | 102 | 179 | 282 | 703 | 730 | 52% |
+| POST /categories | 208 | 231 | 381 | 524 | 930 | 33% |
+| PATCH /products/{id} | 71 | 252 | 399 | 862 | 931 | 18% |
+| PATCH /categories/{id} | 121 | 276 | 404 | 570 | 651 | 14% |
+| DELETE /products/{id} | 35 | 221 | 512 | 778 | 857 | 46% |
+| DELETE /categories/{id} | 32 | 220 | 418 | 733 | 874 | 47% |
+| **ALL** | **1975** | **173** | **331** | **628** | **931** | **56%** |
+
+Overall mean ~194ms. Network RTT baseline median ~88ms.
+
+### 12.3. Findings
+
+* **Functional stability**: the deployment handled the full concurrent mix with zero unexpected errors at ~30 RPS.
+* **Read paths meet the target server-side**: GET `search`, `products/{id}`, and `categories/{id}` show p50 ~150–162ms end-to-end; subtracting the ~88ms network baseline leaves roughly 60–90ms of server time, well within 200ms. Their end-to-end p95 (256–297ms) is inflated mostly by cross-region network RTT and tail jitter rather than server work.
+* **Mutations are the main exceedance**: POST/PATCH/DELETE show p50 220–276ms and p95 380–512ms. This is consistent with Section 11 — mutation endpoints bundle validation reads plus a write/commit phase, so they legitimately exceed 200ms under concurrent load.
+* **Verdict**: the 200ms target holds for read paths at the server level, but end-to-end p95 (331ms overall) is over target from a remote client, driven by (1) the ~88ms cross-region network floor inherent to measuring a remote host and (2) the multi-phase mutation endpoints — both documented as acceptable exceptions in Section 11.
+* **Reproducing closer to the target**: to isolate server-side latency, re-run the probe from a region co-located with the deployment (removing most of the network baseline) or restrict the mix to read endpoints.
