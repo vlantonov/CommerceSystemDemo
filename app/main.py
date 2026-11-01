@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.api import api_router
+from app.cache.redis_client import close_redis_client
 from app.core.config import get_settings
 from app.db.session import create_schema, get_engine, get_session_factory, initialize_database
 from app.observability import (
@@ -75,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    await close_redis_client()
     logger.info("application_shutdown")
     stop_log_listener()
 
@@ -90,7 +92,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Commerce System Demo",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
     )
     app.state.limiter = limiter
@@ -99,7 +101,12 @@ def create_app() -> FastAPI:
     initialize_app_observability(app, settings)
     app.include_router(api_router, prefix=settings.api_prefix)
 
-    @app.get("/", tags=["home"])
+    @app.get(
+        "/",
+        tags=["home"],
+        response_class=HTMLResponse,
+        responses={200: {"content": {"text/html": {"schema": {"type": "string"}}}}},
+    )
     async def home(request: Request):
         try:
             return templates.TemplateResponse(
@@ -129,7 +136,23 @@ def create_app() -> FastAPI:
                 status_code=200,
             )
 
-    @app.get("/health", tags=["health"])
+    @app.get(
+        "/health",
+        tags=["health"],
+        responses={
+            503: {
+                "description": "Database unavailable",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"},
+                        }
+                    }
+                },
+            }
+        },
+    )
     async def health(request: Request) -> dict[str, str]:
         import asyncio
         import time

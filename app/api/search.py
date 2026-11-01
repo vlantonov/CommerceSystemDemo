@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.db.session import get_session
 from app.observability.metrics import search_requests_total, search_result_count, search_zero_results_total
 from app.observability.route import ObservabilityRoute
+from app.schemas.common import FlexibleValidationErrorResponse, RateLimitErrorResponse
 from app.schemas.product import ProductRead, ProductSearchResponse
 from app.services.product_service import search_products
 
@@ -20,16 +21,35 @@ logger = logging.getLogger("app.search")
 _limiter = Limiter(key_func=get_remote_address)
 
 
-@router.get("/search", response_model=ProductSearchResponse)
+@router.get(
+    "/search",
+    response_model=ProductSearchResponse,
+    responses={
+        422: {"model": FlexibleValidationErrorResponse, "description": "Validation error"},
+        429: {"model": RateLimitErrorResponse, "description": "Rate limit exceeded"},
+    },
+)
 @_limiter.limit(lambda: get_settings().rate_limit_search)
 async def search_products_endpoint(
     request: Request,
     q: str | None = Query(default=None, min_length=1, max_length=255),
-    min_price: Decimal | None = Query(default=None, ge=Decimal("0")),
-    max_price: Decimal | None = Query(default=None, ge=Decimal("0")),
-    category_id: int | None = Query(default=None, ge=1),
+    min_price: Decimal | None = Query(
+        default=None,
+        ge=Decimal("0"),
+        le=Decimal("9999999999.99"),
+        max_digits=12,
+        decimal_places=2,
+    ),
+    max_price: Decimal | None = Query(
+        default=None,
+        ge=Decimal("0"),
+        le=Decimal("9999999999.99"),
+        max_digits=12,
+        decimal_places=2,
+    ),
+    category_id: int | None = Query(default=None, ge=1, le=2_147_483_647),
     limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=(2**63 - 1)),
     session: AsyncSession = Depends(get_session),
 ) -> ProductSearchResponse:
     """Search products by text, price range, and category subtree filters."""

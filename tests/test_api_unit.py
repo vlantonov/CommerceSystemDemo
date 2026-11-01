@@ -16,6 +16,12 @@ from app.api import search as search_api
 from app.schemas.category import CategoryCreate, CategoryUpdate
 from app.schemas.product import ProductCreate, ProductUpdate
 
+_search_endpoint_handler = getattr(
+    search_api.search_products_endpoint,
+    "__wrapped__",
+    search_api.search_products_endpoint,
+)
+
 
 def make_request() -> Request:
     """Build a minimal Starlette request for direct endpoint invocation."""
@@ -78,24 +84,21 @@ async def test_create_category_conflict_rolls_back(monkeypatch: pytest.MonkeyPat
 async def test_create_category_success_returns_model(monkeypatch: pytest.MonkeyPatch):
     session = AsyncMock()
     session.add = MagicMock()
-    session.commit = AsyncMock()
 
-    captured = {}
+    async def commit_side_effect():
+        session.add.call_args[0][0].id = 55
+        session.add.call_args[0][0].created_at = datetime.now(timezone.utc)
+        session.add.call_args[0][0].updated_at = datetime.now(timezone.utc)
 
-    async def refresh_side_effect(category):
-        category.id = 55
-        category.created_at = datetime.now(timezone.utc)
-        category.updated_at = datetime.now(timezone.utc)
-        captured["category"] = category
-
-    session.refresh = AsyncMock(side_effect=refresh_side_effect)
+    session.commit = AsyncMock(side_effect=commit_side_effect)
+    session.refresh = AsyncMock()
     payload = CategoryCreate(name="Root", parent_id=None)
 
     result = await categories_api.create_category(payload=payload, session=session)
 
     assert result.id == 55
     assert result.name == "Root"
-    assert captured["category"].name == "Root"
+    session.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -271,7 +274,7 @@ async def test_update_category_success_sets_fields(monkeypatch: pytest.MonkeyPat
     assert result.name == "New"
     assert result.parent_id == 2
     session.commit.assert_awaited_once()
-    session.refresh.assert_awaited_once()
+    session.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -323,14 +326,14 @@ async def test_create_product_conflict_rolls_back():
 async def test_create_product_success_returns_model():
     session = AsyncMock()
     session.add = MagicMock()
-    session.commit = AsyncMock()
 
-    async def refresh_side_effect(product):
-        product.id = 99
-        product.created_at = datetime.now(timezone.utc)
-        product.updated_at = datetime.now(timezone.utc)
+    async def commit_side_effect():
+        session.add.call_args[0][0].id = 99
+        session.add.call_args[0][0].created_at = datetime.now(timezone.utc)
+        session.add.call_args[0][0].updated_at = datetime.now(timezone.utc)
 
-    session.refresh = AsyncMock(side_effect=refresh_side_effect)
+    session.commit = AsyncMock(side_effect=commit_side_effect)
+    session.refresh = AsyncMock()
 
     payload = ProductCreate(
         title="Prod",
@@ -344,6 +347,7 @@ async def test_create_product_success_returns_model():
 
     assert result.id == 99
     assert result.sku == "OK-001"
+    session.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -496,7 +500,7 @@ async def test_update_product_success_updates_fields(monkeypatch: pytest.MonkeyP
     assert result.title == "New"
     assert result.sku == "NEW-001"
     session.commit.assert_awaited_once()
-    session.refresh.assert_awaited_once()
+    session.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -529,7 +533,7 @@ async def test_search_invalid_price_range_returns_422():
     session = AsyncMock()
 
     with pytest.raises(HTTPException) as exc:
-        await search_api.search_products_endpoint(
+        await _search_endpoint_handler(
             request=request,
             q=None,
             min_price=Decimal("10"),
@@ -558,7 +562,7 @@ async def test_search_sets_request_state_and_records_zero_results(monkeypatch: p
 
     monkeypatch.setattr(search_api, "search_products", fake_search_products)
 
-    response = await search_api.search_products_endpoint(
+    response = await _search_endpoint_handler(
         request=request,
         q="gaming",
         min_price=Decimal("100"),
@@ -600,7 +604,7 @@ async def test_search_returns_product_response_items(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(search_api, "search_products", fake_search_products)
 
-    response = await search_api.search_products_endpoint(
+    response = await _search_endpoint_handler(
         request=request,
         q="game",
         min_price=None,

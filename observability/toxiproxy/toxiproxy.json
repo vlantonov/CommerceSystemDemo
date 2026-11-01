@@ -1,0 +1,8 @@
+[
+  {
+    "name": "commerce_db_proxy",
+    "listen": "0.0.0.0:8666",
+    "upstream": "db:5432",
+    "enabled": true
+  }
+]

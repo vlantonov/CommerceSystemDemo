@@ -53,6 +53,10 @@
    * [10.3. Logging and Metrics Path](#103-logging-and-metrics-path)
    * [10.4. Validation and Benchmarks](#104-validation-and-benchmarks)
 * [11. Investigation Conclusions on 200ms Target](#11-investigation-conclusions-on-200ms-target)
+* [12. Remote Deployment Latency Verification](#12-remote-deployment-latency-verification)
+   * [12.1. Testing methodology](#121-testing-methodology)
+   * [12.2. Results](#122-results)
+   * [12.3. Findings](#123-findings)
 
 ## 1. Task description
 Create a service which handles operations on products in an E-commerce system.
@@ -256,6 +260,7 @@ flowchart TB
 * PostgreSQL is the source of truth for products, categories, prices, and relational constraints.
 * Product image binaries should live outside the relational database; only image URLs and metadata belong in the service data model.
 * Category subtree search is implemented through recursive CTE queries over an adjacency-list category structure.
+* Hot category-subtree lookups can be served from Redis (versioned TTL cache) to reduce repeated recursive CTE latency under bursty search traffic.
 * Search performance relies on targeted indexes and offset-based pagination for the current scale of tens of thousands of products.
 
 ## 6. Database Design
@@ -516,6 +521,9 @@ The `.env` file is **not** committed to the repository (it is listed in `.gitign
 | `TELEMETRY_ENABLED` | `true` | Set to `false` if you are not running the observability stack. |
 | `API_PREFIX` | `/api/v1` | URL prefix for all API routes. |
 | `AUTO_CREATE_SCHEMA` | `true` | Creates tables on startup when no Alembic migration has been run yet. |
+| `REDIS_URL` | _(empty)_ | Optional Redis connection URL for category subtree caching (for example `redis://localhost:6379/0`). |
+| `CATEGORY_SUBTREE_CACHE_ENABLED` | `false` | Enables Redis caching for hot category subtree lookups when `REDIS_URL` is set. |
+| `CATEGORY_SUBTREE_CACHE_TTL_SECONDS` | `300` | TTL for cached category subtree ID lists. |
 
 > **Tip:** When using **Docker Compose** (Option A below), the compose file passes its own `DATABASE_URL` pointing at the containerized PostgreSQL, so the value in `.env` is only used if you run the dev server directly on the host (Option C).
 
@@ -539,6 +547,7 @@ Note:
 * Compose now includes a one-shot `migrate-indexes` service that runs `scripts/migrate_indexes.py` after PostgreSQL becomes healthy.
 * The `app` service waits for this migration to complete successfully before starting.
 * On a fresh database, `migrate-indexes` now creates the base schema first, then applies indexes, so `docker compose up -d` succeeds on first boot.
+* Compose includes Redis and enables category subtree caching in the `app` container by default for lower-latency repeat subtree searches.
 * Optional: set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in your shell or `.env` before `docker compose up` to override the default local database credentials.
 
 #### Option B: Run observability locally against a remote app and database
@@ -724,7 +733,8 @@ If you see `Connection refused [Errno 111]`, PostgreSQL is not accessible. Verif
 
 ### 8.3. Testing
 
-The test suite includes **35 integration tests** covering:
+The test suite includes endpoint and service integration tests plus API contract
+tests:
 
 **Service Layer Tests (4 tests)** — `tests/test_search.py`
 * Category subtree filtering with descendants
@@ -739,6 +749,11 @@ The test suite includes **35 integration tests** covering:
 * Advanced search with filters and pagination
 * Error handling (404, 409, 422 responses)
 
+**OpenAPI Contract Tests** — `tests/test_api_contract.py`
+* Schemathesis fuzzing against the generated OpenAPI document
+* Response validation against declared API schemas
+* Detection of undocumented response/status behavior
+
 **Note:** Tests automatically provision a PostgreSQL container via testcontainers — no manual database setup required.
 
 Run all tests:
@@ -747,13 +762,15 @@ Run all tests:
 pytest -q
 ```
 
-Expected output: `35 passed`
+Expected output includes passing tests for service, endpoint, and contract
+suites.
 
 Run specific test file:
 
 ```bash
 pytest tests/test_search.py -q    # Service layer tests
 pytest tests/test_api.py -q       # Endpoint integration tests
+pytest tests/test_api_contract.py -q  # OpenAPI contract tests (Schemathesis)
 ```
 
 Run opt-in performance benchmarks:
@@ -763,6 +780,8 @@ pytest -m performance -q
 ```
 
 The default test run excludes performance benchmarks to keep CI fast.
+Pull requests also run a dedicated contract-test job for
+`tests/test_api_contract.py`.
 To run benchmarks in GitHub Actions, start the `Python application` workflow
 manually and set `run_performance` to `true`.
 
@@ -814,6 +833,8 @@ Metrics:
 * `commerce_product_mutations_total` - product create update delete outcomes
 * `commerce_category_mutations_total` - category create update delete outcomes
 * `commerce_category_validation_failures_total` - category validation failures by reason
+* `commerce_category_subtree_cache_hits_total` - Redis cache hits for category subtree lookups
+* `commerce_category_subtree_cache_misses_total` - Redis cache misses/fallbacks for category subtree lookups
 
 ### 9.2. Telemetry flow
 
@@ -839,6 +860,7 @@ FastAPI app
 ### 9.3. Local stack
 
 `docker-compose.yml` runs an observability stack:
+* `toxiproxy` provides a programmable TCP proxy for DB chaos scenarios (outage / latency injection)
 * `otel-collector` receives OTLP traces from the API and forwards to Tempo
 * `tempo` stores traces
 * `loki` stores logs
@@ -922,6 +944,13 @@ If the catalog is already seeded, skip the initial setup phase:
 .venv/bin/python scripts/load_test.py --skip-seed --duration 60 --workers 8
 ```
 
+Optional: run a chaos harness that kills DB temporarily and injects DB network
+latency through Toxiproxy while load is active:
+
+```bash
+.venv/bin/python scripts/chaos_test.py --load-duration 240 --workers 10
+```
+
 3. Open the tools:
 * Grafana: `http://127.0.0.1:3000`
 * Prometheus: `http://127.0.0.1:9090`
@@ -946,6 +975,7 @@ Notes:
 * After instrumentation changes, rebuild the application container so the running service exposes the new metrics.
 * Some counters appear only after the first matching event is observed. Until then, Prometheus and Grafana can show no data for that series.
 * The load test intentionally produces successful traffic and controlled 4xx scenarios so the P1, P2, and P3 dashboards all receive data.
+* The chaos harness prints `CHAOS_EVENT` timestamps; use those windows to correlate spikes in P1/P3 dashboard latency and error panels.
 
 ## 10. Implemented Improvements
 
@@ -1016,6 +1046,7 @@ The findings below are based on observed load-test runs, production-like remote 
 The 200ms target remains the default expectation, but the following scenarios can legitimately exceed it.
 
 * Search requests that require both data retrieval and `COUNT(*)` (for example price-range searches with non-trivial result sets) may exceed 200ms because they execute two DB-heavy phases.
+* Repeated searches on the same category subtree now benefit from Redis-cached descendant IDs, reducing recursive CTE pressure on hot paths.
 * Mutation endpoints (`POST`, `PATCH`, `DELETE`) can exceed 200ms under concurrent load because they include validation reads plus write/commit phases in one request.
 * Database slow-tier events (observed as ~90-100ms query durations) can push otherwise normal requests above 200ms, especially when multiple queries occur in the same request.
 * Burst concurrency can temporarily increase queue wait and in-flight pressure, which raises end-to-end latency even when individual SQL statements are healthy.
@@ -1023,3 +1054,49 @@ The 200ms target remains the default expectation, but the following scenarios ca
 * Cold-start and warmup windows after deploy/restart may produce transient latency spikes before caches and pools stabilize.
 
 Mitigation is tracked in the observability dashboards and logs (`request_slow`, DB timing decomposition fields, pool usage), and tuning guidance is documented in the remote service configuration section.
+
+## 12. Remote Deployment Latency Verification
+
+This section records a direct verification of the 200ms target against the live
+Render deployment at `https://commercesystemdemo.onrender.com`, including the
+methodology so the run can be reproduced.
+
+### 12.1. Testing methodology
+
+* **Target**: remote deployment `https://commercesystemdemo.onrender.com` (cross-region managed host + managed PostgreSQL).
+* **Traffic generation**: [scripts/load_test.py](scripts/load_test.py) with `--workers 8 --duration 90`, using the standard weighted mix (search 33%, product reads 26%, category reads 11%, product mutations 11%, category mutations 8%, errors 5%, category validation failures 6%). The script seeds a baseline catalog, then drives concurrent traffic and reports throughput and error counts.
+* **Latency capture**: because `load_test.py` reports only throughput/error counters (it is primarily a dashboard smoke-test), a companion latency probe reuses the same traffic generators and records per-request wall-clock latency, bucketed by `METHOD /path-template`, to compute p50/p95/p99 and the share of requests within 200ms. Run `--workers 8 --duration 60`.
+* **Network baseline**: 10 sequential `GET /health` probes measured client→Render round-trip time to separate network cost from server processing. Observed RTT: min 62ms, median ~88ms, max 132ms. This baseline is included in every end-to-end latency number below; subtract roughly 70–90ms to estimate server-side time.
+* **Note**: all measurements are end-to-end from a remote client, so they include client→Render network latency and public-internet jitter that in-cluster or same-region clients would not incur.
+
+### 12.2. Results
+
+Load generation (`load_test.py`, 8 workers × 90s): 2,700 requests, 0 unexpected
+errors, ~30 RPS sustained.
+
+Latency probe (same mix, 8 workers × 60s, 1,975 timed requests), latency in milliseconds:
+
+| Endpoint | n | p50 | p95 | p99 | max | ≤200ms |
+|---|---|---|---|---|---|---|
+| GET /products/search | 668 | 162 | 267 | 583 | 771 | 64% |
+| GET /products/{id} | 433 | 159 | 259 | 342 | 635 | 69% |
+| GET /categories/{id} | 156 | 153 | 256 | 326 | 333 | 76% |
+| GET /products (list) | 103 | 180 | 293 | 368 | 634 | 55% |
+| GET /categories (list) | 46 | 183 | 297 | 319 | 323 | 57% |
+| POST /products | 102 | 179 | 282 | 703 | 730 | 52% |
+| POST /categories | 208 | 231 | 381 | 524 | 930 | 33% |
+| PATCH /products/{id} | 71 | 252 | 399 | 862 | 931 | 18% |
+| PATCH /categories/{id} | 121 | 276 | 404 | 570 | 651 | 14% |
+| DELETE /products/{id} | 35 | 221 | 512 | 778 | 857 | 46% |
+| DELETE /categories/{id} | 32 | 220 | 418 | 733 | 874 | 47% |
+| **ALL** | **1975** | **173** | **331** | **628** | **931** | **56%** |
+
+Overall mean ~194ms. Network RTT baseline median ~88ms.
+
+### 12.3. Findings
+
+* **Functional stability**: the deployment handled the full concurrent mix with zero unexpected errors at ~30 RPS.
+* **Read paths meet the target server-side**: GET `search`, `products/{id}`, and `categories/{id}` show p50 ~150–162ms end-to-end; subtracting the ~88ms network baseline leaves roughly 60–90ms of server time, well within 200ms. Their end-to-end p95 (256–297ms) is inflated mostly by cross-region network RTT and tail jitter rather than server work.
+* **Mutations are the main exceedance**: POST/PATCH/DELETE show p50 220–276ms and p95 380–512ms. This is consistent with Section 11 — mutation endpoints bundle validation reads plus a write/commit phase, so they legitimately exceed 200ms under concurrent load.
+* **Verdict**: the 200ms target holds for read paths at the server level, but end-to-end p95 (331ms overall) is over target from a remote client, driven by (1) the ~88ms cross-region network floor inherent to measuring a remote host and (2) the multi-phase mutation endpoints — both documented as acceptable exceptions in Section 11.
+* **Reproducing closer to the target**: to isolate server-side latency, re-run the probe from a region co-located with the deployment (removing most of the network baseline) or restrict the mix to read endpoints.

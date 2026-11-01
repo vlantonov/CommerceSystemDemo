@@ -1,18 +1,19 @@
 """Product business logic helpers and search orchestration."""
 
 import re
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from time import perf_counter
+
+from sqlalchemy import false, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.observability.db_timing import timed_execute_all, timed_execute_scalars_all
+from app.models.product import Product
+from app.services.category_service import get_category_subtree_ids
 
 
 def _escape_like(pattern: str) -> str:
     """Escape LIKE metacharacters (%, _, \\) so they match literally."""
     return re.sub(r"([%_\\])", r"\\\1", pattern)
-
-from app.observability.db_timing import timed_execute_all, timed_execute_scalars_all
-from app.models.product import Product
-from app.services.category_service import category_subtree_cte
 
 
 async def search_products(
@@ -44,8 +45,11 @@ async def search_products(
         query = query.where(Product.price <= max_price)
 
     if category_id is not None:
-        category_tree = category_subtree_cte(category_id)
-        query = query.where(Product.category_id.in_(select(category_tree.c.id)))
+        subtree_ids = await get_category_subtree_ids(session, category_id)
+        if subtree_ids:
+            query = query.where(Product.category_id.in_(subtree_ids))
+        else:
+            query = query.where(false())
 
     query = query.order_by(Product.id)
     timing_context["query_build_ms"] = (perf_counter() - query_build_start) * 1000

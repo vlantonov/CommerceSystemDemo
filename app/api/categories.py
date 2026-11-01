@@ -1,8 +1,10 @@
 """Category API endpoints for CRUD operations."""
 
 import logging
+from typing import Annotated
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,13 +15,14 @@ from app.observability.db_timing import timed_execute_scalar_one, timed_execute_
 from app.observability.metrics import category_mutations_total, category_validation_failures_total
 from app.observability.route import ObservabilityRoute
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
-from app.schemas.common import PaginatedResponse
+from app.schemas.common import ErrorDetailResponse, FlexibleValidationErrorResponse, PaginatedResponse
 from app.services.category_service import (
     MAX_CATEGORY_DEPTH,
     CategoryCycleError,
     CategoryDepthError,
     CategoryParentNotFoundError,
     get_category_or_none,
+    invalidate_category_subtree_cache,
     validate_category_parent,
     validate_category_reparent,
 )
@@ -28,12 +31,40 @@ router = APIRouter(route_class=ObservabilityRoute)
 logger = logging.getLogger("app.categories")
 
 
+def _hydrate_audit_fields(model: Category, *, is_create: bool = False) -> Category:
+    """Populate audit timestamps before write so the updated model stays hydrated."""
+    now = datetime.now(timezone.utc)
+    if is_create:
+        if getattr(model, "created_at", None) is None:
+            model.created_at = now
+    model.updated_at = now
+    return model
+
+
+async def _finalize_mutation_response(session: AsyncSession, model: Category) -> Category:
+    """Refresh only when the write did not fully hydrate the ORM instance."""
+    missing_fields = getattr(model, "id", None) is None or getattr(model, "created_at", None) is None or getattr(model, "updated_at", None) is None
+    if missing_fields and hasattr(session, "refresh"):
+        await session.refresh(model)
+    return model
+
+
 class CategoryListResponse(PaginatedResponse):
     """Response model for categorylist endpoints."""
     items: list[CategoryRead]
 
 
-@router.post("", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=CategoryRead,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorDetailResponse, "description": "Malformed request body"},
+        404: {"model": ErrorDetailResponse, "description": "Parent category not found"},
+        409: {"model": ErrorDetailResponse, "description": "Category name conflict"},
+        422: {"model": FlexibleValidationErrorResponse, "description": "Validation error"},
+    },
+)
 async def create_category(payload: CategoryCreate, session: AsyncSession = Depends(get_session)) -> CategoryRead:
     """Create category."""
     if payload.parent_id is not None:
@@ -57,8 +88,10 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
             )
 
     category = Category(name=payload.name, parent_id=payload.parent_id)
+    category = _hydrate_audit_fields(category, is_create=True)
     session.add(category)
     try:
+        await session.flush()
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -68,7 +101,9 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
             extra={"category_name": payload.name, "parent_id": payload.parent_id},
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
-    await session.refresh(category)
+
+    category = await _finalize_mutation_response(session, category)
+    await invalidate_category_subtree_cache()
     category_mutations_total.add(1, {"operation": "create", "result": "success"})
     logger.info(
         "category_created",
@@ -81,8 +116,15 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
     return CategoryRead.model_validate(category)
 
 
-@router.get("/{category_id}", response_model=CategoryRead)
-async def get_category(category_id: int, session: AsyncSession = Depends(get_session)) -> CategoryRead:
+@router.get(
+    "/{category_id}",
+    response_model=CategoryRead,
+    responses={404: {"model": ErrorDetailResponse, "description": "Category not found"}},
+)
+async def get_category(
+    category_id: Annotated[int, Path(ge=1, le=2147483647)],
+    session: AsyncSession = Depends(get_session),
+) -> CategoryRead:
     """Get category."""
     category = await get_category_or_none(session, category_id)
     if category is None:
@@ -93,7 +135,7 @@ async def get_category(category_id: int, session: AsyncSession = Depends(get_ses
 @router.get("", response_model=CategoryListResponse)
 async def list_categories(
     limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=(2**63 - 1)),
     session: AsyncSession = Depends(get_session),
 ) -> CategoryListResponse:
     """List categories."""
@@ -105,9 +147,20 @@ async def list_categories(
     return CategoryListResponse(items=[CategoryRead.model_validate(item) for item in records], total=total, limit=limit, offset=offset)
 
 
-@router.patch("/{category_id}", response_model=CategoryRead)
+@router.patch(
+    "/{category_id}",
+    response_model=CategoryRead,
+    responses={
+        400: {"model": ErrorDetailResponse, "description": "Malformed request body"},
+        404: {"model": ErrorDetailResponse, "description": "Category not found"},
+        409: {"model": ErrorDetailResponse, "description": "Category name conflict"},
+        422: {"model": FlexibleValidationErrorResponse, "description": "Validation error"},
+    },
+)
 async def update_category(
-    category_id: int, payload: CategoryUpdate, session: AsyncSession = Depends(get_session)
+    category_id: Annotated[int, Path(ge=1, le=2147483647)],
+    payload: CategoryUpdate,
+    session: AsyncSession = Depends(get_session),
 ) -> CategoryRead:
     """Update category."""
     category = await get_category_or_none(session, category_id)
@@ -154,14 +207,19 @@ async def update_category(
     if "name" in updates and updates["name"] is not None:
         category.name = updates["name"]
 
+    category = _hydrate_audit_fields(category)
+
     try:
+        await session.flush()
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
         category_mutations_total.add(1, {"operation": "update", "result": "conflict"})
         logger.warning("category_update_conflict", extra={"category_id": category_id})
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name must be unique per parent") from exc
-    await session.refresh(category)
+
+    category = await _finalize_mutation_response(session, category)
+    await invalidate_category_subtree_cache()
     category_mutations_total.add(1, {"operation": "update", "result": "success"})
     logger.info(
         "category_updated",
@@ -175,8 +233,15 @@ async def update_category(
     return CategoryRead.model_validate(category)
 
 
-@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_category(category_id: int, session: AsyncSession = Depends(get_session)) -> None:
+@router.delete(
+    "/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"model": ErrorDetailResponse, "description": "Category not found"}},
+)
+async def delete_category(
+    category_id: Annotated[int, Path(ge=1, le=2147483647)],
+    session: AsyncSession = Depends(get_session),
+) -> None:
     """Delete category."""
     category = await get_category_or_none(session, category_id)
     if category is None:
@@ -185,6 +250,7 @@ async def delete_category(category_id: int, session: AsyncSession = Depends(get_
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
     await session.delete(category)
     await session.commit()
+    await invalidate_category_subtree_cache()
     category_mutations_total.add(1, {"operation": "delete", "result": "success"})
     logger.info(
         "category_deleted",
