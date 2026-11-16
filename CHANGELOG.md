@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No entries yet._
 
+## [0.3.1] - 2026-11-01
+
+### Changed
+
+- Released the current baseline with no additional unreleased entries.
+
 ## [0.3.0] - 2026-11-01
 
 ### Added
@@ -215,7 +221,8 @@ This is an early development release. The public API may change in subsequent re
 
 | Version | Release Date | Status | Notes |
 |---------|-------------|--------|-------|
-| [0.3.0](#030---2026-11-01) | 2026-11-01 | Current | Release of planned search and bulk data capability enhancements |
+| [0.3.1](#031---2026-11-01) | 2026-11-01 | Current | Baseline release from the latest unreleased state (no additional entries) |
+| [0.3.0](#030---2026-11-01) | 2026-11-01 | Previous | Release of planned search and bulk data capability enhancements |
 | [0.2.2](#022---2026-11-01) | 2026-11-01 | Previous | Contract testing, latency chaos harness, and validation hardening updates |
 | [Unreleased](#unreleased) | - | In Progress | Upcoming features and improvements |
 
