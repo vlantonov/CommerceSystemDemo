@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/vlantonov/CommerceSystemDemo/actions/workflows/python-application.yml/badge.svg)](https://github.com/vlantonov/CommerceSystemDemo/actions/workflows/python-application.yml)
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/vlantonov/CommerceSystemDemo/actions/workflows/python-application.yml)
-[![Coverage](https://img.shields.io/badge/coverage-unknown-lightgrey)](https://github.com/vlantonov/CommerceSystemDemo/actions/workflows/python-application.yml)
+[![Coverage](https://codecov.io/gh/vlantonov/CommerceSystemDemo/branch/main/graph/badge.svg)](https://codecov.io/gh/vlantonov/CommerceSystemDemo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Table of Contents
