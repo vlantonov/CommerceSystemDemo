@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No entries yet._
 
+## [0.3.2] - 2026-11-20
+
+### Changed
+
+- Added automated test coverage reporting and a live coverage badge using the Coveralls GitHub Action.
+
 ## [0.3.1] - 2026-11-01
 
 ### Changed
@@ -208,10 +214,10 @@ _No entries yet._
 
 ### Version Information
 
-**Semantic Version**: 0.1.0
+**Semantic Version**: 0.3.2
 - Major: 0 (initial development phase)
-- Minor: 1 (includes functional features)
-- Patch: 0 (no bug fixes in this version, only features and bug fix for space-only names)
+- Minor: 3 (includes functional and operational enhancements)
+- Patch: 2 (automated coverage reporting and coverage badge updates)
 
 This is an early development release. The public API may change in subsequent releases.
 
@@ -221,7 +227,8 @@ This is an early development release. The public API may change in subsequent re
 
 | Version | Release Date | Status | Notes |
 |---------|-------------|--------|-------|
-| [0.3.1](#031---2026-11-01) | 2026-11-01 | Current | Baseline release from the latest unreleased state (no additional entries) |
+| [0.3.2](#032---2026-11-20) | 2026-11-20 | Current | Automated test coverage reporting and live coverage badge |
+| [0.3.1](#031---2026-11-01) | 2026-11-01 | Previous | Baseline release from the latest unreleased state (no additional entries) |
 | [0.3.0](#030---2026-11-01) | 2026-11-01 | Previous | Release of planned search and bulk data capability enhancements |
 | [0.2.2](#022---2026-11-01) | 2026-11-01 | Previous | Contract testing, latency chaos harness, and validation hardening updates |
 | [Unreleased](#unreleased) | - | In Progress | Upcoming features and improvements |
